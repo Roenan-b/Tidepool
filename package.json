@@ -55,5 +55,6 @@
     "*.{json,md,yml,yaml,css}": [
       "prettier --write"
     ]
-  }
+  },
+  "packageManager": "npm@11.21.3"
 }

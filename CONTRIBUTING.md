@@ -14,7 +14,7 @@ The repository does not accept outside code changes. Pull requests from people o
 
 ## Development setup
 
-Requirements: Node.js 22.13 or newer (see `.nvmrc`), npm 10, and Docker for the local Postgres.
+Requirements: Node.js 22.13 or newer (see `.nvmrc`), npm 11 (pinned in `package.json`), and Docker for the local Postgres.
 
 ```bash
 npm ci

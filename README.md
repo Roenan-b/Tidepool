@@ -63,7 +63,7 @@ Design rules the code enforces:
 
 ## Quick start (paper mode)
 
-Prerequisites: Node.js 22.13 or newer (see `.nvmrc`), npm 10, Docker (for Postgres) or a local Postgres 16.
+Prerequisites: Node.js 22.13 or newer (see `.nvmrc`), npm 11 (pinned in `package.json`), Docker (for Postgres) or a local Postgres 16.
 
 ```bash
 npm install
