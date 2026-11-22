@@ -9,7 +9,9 @@ const ADDRESS = '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin';
 
 describe('proxy route table', () => {
   it('maps to the documented engine endpoints', () => {
-    expect(Object.fromEntries(Object.entries(PROXY_ROUTES).map(([k, v]) => [k, `${v.method} ${v.enginePath}`]))).toEqual({
+    expect(
+      Object.fromEntries(Object.entries(PROXY_ROUTES).map(([k, v]) => [k, `${v.method} ${v.enginePath}`])),
+    ).toEqual({
       status: 'GET /status',
       positions: 'GET /positions',
       candidates: 'GET /candidates',
@@ -46,9 +48,15 @@ describe('proxy route table', () => {
 
 describe('prepareProxy bodies', () => {
   it('validates start presets', () => {
-    expect(prepareProxy('start', owner, { body: { preset: 'balanced' } })).toMatchObject({ ok: true, body: { preset: 'balanced' } });
+    expect(prepareProxy('start', owner, { body: { preset: 'balanced' } })).toMatchObject({
+      ok: true,
+      body: { preset: 'balanced' },
+    });
     expect(prepareProxy('start', owner, { body: { preset: 'yolo' } })).toMatchObject({ ok: false, status: 400 });
-    expect(prepareProxy('start', owner, { body: { preset: 'balanced', extra: 1 } })).toMatchObject({ ok: false, status: 400 });
+    expect(prepareProxy('start', owner, { body: { preset: 'balanced', extra: 1 } })).toMatchObject({
+      ok: false,
+      status: 400,
+    });
   });
 
   it('requires SELL_ALL for the kill switch', () => {
@@ -67,13 +75,21 @@ describe('prepareProxy bodies', () => {
       ok: true,
       body: { mode: 'live', confirm: LIVE_MODE_CONFIRMATION },
     });
-    expect(prepareProxy('mode', owner, { body: { mode: 'live', confirm: LIVE_MODE_CONFIRMATION.toLowerCase() } })).toMatchObject({ ok: false, error: 'confirmation_mismatch' });
+    expect(
+      prepareProxy('mode', owner, { body: { mode: 'live', confirm: LIVE_MODE_CONFIRMATION.toLowerCase() } }),
+    ).toMatchObject({ ok: false, error: 'confirmation_mismatch' });
     expect(prepareProxy('mode', owner, { body: { mode: 'live' } })).toMatchObject({ ok: false, status: 400 });
-    expect(prepareProxy('mode', operator, { body: { mode: 'live', confirm: LIVE_MODE_CONFIRMATION } })).toMatchObject({ ok: false, status: 403 });
+    expect(prepareProxy('mode', operator, { body: { mode: 'live', confirm: LIVE_MODE_CONFIRMATION } })).toMatchObject({
+      ok: false,
+      status: 403,
+    });
   });
 
   it('paper mode is allowed for both roles and drops any confirm text', () => {
-    expect(prepareProxy('mode', operator, { body: { mode: 'paper', confirm: 'anything' } })).toMatchObject({ ok: true, body: { mode: 'paper' } });
+    expect(prepareProxy('mode', operator, { body: { mode: 'paper', confirm: 'anything' } })).toMatchObject({
+      ok: true,
+      body: { mode: 'paper' },
+    });
   });
 
   it('validates clear-halt reasons', () => {
@@ -108,6 +124,10 @@ describe('prepareProxy queries', () => {
     expect(prepareProxy('positions', owner, { search: new URLSearchParams('status=open') }).ok).toBe(true);
     expect(prepareProxy('positions', owner, { search: new URLSearchParams('status=../../x') }).ok).toBe(false);
     expect(prepareProxy('signals', operator, { search: new URLSearchParams('source=x&limit=10') }).ok).toBe(true);
-    expect(prepareProxy('status', owner, { search: new URLSearchParams() })).toMatchObject({ ok: true, method: 'GET', enginePath: '/status' });
+    expect(prepareProxy('status', owner, { search: new URLSearchParams() })).toMatchObject({
+      ok: true,
+      method: 'GET',
+      enginePath: '/status',
+    });
   });
 });

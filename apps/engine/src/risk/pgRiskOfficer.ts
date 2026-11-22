@@ -30,7 +30,7 @@ import { storableString } from '../audit/canonical.js';
 import type { Logger } from '../log.js';
 import { toBig, toBigOrNull } from '../db/pool.js';
 import type { EngineConfig } from '../config.js';
-import { WITHDRAWAL_SLEEVE, loadBookTotals, utcDate, type BookTotals } from './book.js';
+import { WITHDRAWAL_SLEEVE, loadBookTotals, utcDate } from './book.js';
 import { tokenSafetyVeto } from './safety.js';
 
 export interface RiskOfficerSettings {
@@ -102,7 +102,8 @@ export interface PgRiskOfficerOptions {
   logger?: Logger;
 }
 
-export type ControlResult = { ok: true; state: EngineState; haltReason: HaltReason | null } | { ok: false; reason: string };
+export type ControlResult =
+  { ok: true; state: EngineState; haltReason: HaltReason | null } | { ok: false; reason: string };
 
 export interface OpenPositionDetail extends OpenPositionView {
   status: 'open' | 'closing';
@@ -151,8 +152,15 @@ const RETRYABLE = new Set(['40001', '40P01']);
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,200}$/;
 const SLEEVE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_LAMPORTS = (1n << 62n);
-const EXIT_REASONS = new Set<ExitReport['reason']>(['take_profit', 'stop_loss', 'time_stop', 'kill_switch', 'manual', 'filter_change']);
+const MAX_LAMPORTS = 1n << 62n;
+const EXIT_REASONS = new Set<ExitReport['reason']>([
+  'take_profit',
+  'stop_loss',
+  'time_stop',
+  'kill_switch',
+  'manual',
+  'filter_change',
+]);
 const PRESET_NAMES = new Set<PresetName>(['conservative', 'balanced', 'aggressive']);
 
 export class RiskError extends Error {
@@ -168,6 +176,7 @@ function assertLamports(v: unknown, name: string, allowZero = false): bigint {
   return v;
 }
 
+// eslint-disable-next-line no-control-regex -- strips control characters on purpose
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
 const MAX_SYMBOL_CHARS = 64;
 
@@ -227,7 +236,8 @@ export class PgRiskOfficer implements RiskOfficer {
     this.log = opts.logger;
     const secret = opts.ticketSecret ?? null;
     if (opts.mode === 'live') {
-      if (!secret || secret.length < 32) throw new RiskError('live mode requires a ticket secret of at least 32 characters');
+      if (!secret || secret.length < 32)
+        throw new RiskError('live mode requires a ticket secret of at least 32 characters');
       this.ticketSecret = secret;
     } else {
       this.ticketSecret = null; // paper mode never issues tickets
@@ -270,14 +280,25 @@ export class PgRiskOfficer implements RiskOfficer {
     });
   }
 
-  private event(tx: Tx, type: string, ref: string | null, payload: Record<string, unknown>, actor: AuditActor = 'risk'): void {
+  private event(
+    tx: Tx,
+    type: string,
+    ref: string | null,
+    payload: Record<string, unknown>,
+    actor: AuditActor = 'risk',
+  ): void {
     tx.events.push({ actor, type, ref, payload: { mode: this.tradingMode, ...payload } });
   }
 
   private async lockState(tx: Tx): Promise<StateRow> {
     const res = await tx.client.query<{
-      engine_state: EngineState; halt_reason: string | null; preset: PresetName; cash_lamports: string;
-      peak_equity_lamports: string; sod_equity_lamports: string; sod_date: string | null;
+      engine_state: EngineState;
+      halt_reason: string | null;
+      preset: PresetName;
+      cash_lamports: string;
+      peak_equity_lamports: string;
+      sod_equity_lamports: string;
+      sod_date: string | null;
     }>(
       `SELECT engine_state, halt_reason, preset, cash_lamports, peak_equity_lamports, sod_equity_lamports, to_char(sod_date, 'YYYY-MM-DD') AS sod_date
          FROM pool_state WHERE mode = $1 FOR UPDATE`,
@@ -301,11 +322,27 @@ export class PgRiskOfficer implements RiskOfficer {
       `UPDATE pool_state SET engine_state = $2, halt_reason = $3, preset = $4, cash_lamports = $5,
               peak_equity_lamports = $6, sod_equity_lamports = $7, sod_date = $8::date, updated_at = $9
         WHERE mode = $1`,
-      [this.tradingMode, s.engineState, s.haltReason, s.preset, s.cash.toString(), s.peak.toString(), s.sod.toString(), s.sodDate, tx.now],
+      [
+        this.tradingMode,
+        s.engineState,
+        s.haltReason,
+        s.preset,
+        s.cash.toString(),
+        s.peak.toString(),
+        s.sod.toString(),
+        s.sodDate,
+        tx.now,
+      ],
     );
   }
 
-  private async ledger(tx: Tx, kind: 'deposit' | 'withdraw' | 'buy' | 'sell' | 'fee' | 'adjustment', lamports: bigint, ref: string | null, note: string | null): Promise<void> {
+  private async ledger(
+    tx: Tx,
+    kind: 'deposit' | 'withdraw' | 'buy' | 'sell' | 'fee' | 'adjustment',
+    lamports: bigint,
+    ref: string | null,
+    note: string | null,
+  ): Promise<void> {
     if (lamports === 0n) return;
     await tx.client.query(
       'INSERT INTO ledger_entries (mode, at, kind, lamports, ref, note) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -358,7 +395,13 @@ export class PgRiskOfficer implements RiskOfficer {
         s.haltReason = null;
         if (s.engineState === 'halted') s.engineState = 'running';
         this.event(tx, 'halt_auto_cleared', null, { reason: 'daily_loss_limit', newState: s.engineState });
-        tx.alerts.push({ kind: 'halt_cleared', severity: 'info', mode: this.tradingMode, title: 'Daily loss halt cleared', body: `New UTC day ${today}; trading state is ${s.engineState}.` });
+        tx.alerts.push({
+          kind: 'halt_cleared',
+          severity: 'info',
+          mode: this.tradingMode,
+          title: 'Daily loss halt cleared',
+          body: `New UTC day ${today}; trading state is ${s.engineState}.`,
+        });
       }
     }
     if (equity > s.peak) s.peak = equity;
@@ -367,7 +410,12 @@ export class PgRiskOfficer implements RiskOfficer {
   /** Sets a halt. Returns true when the state changed. Caller must hold the pool_state lock. */
   private applyHalt(tx: Tx, s: StateRow, reason: HaltReason, detail: string, actor: AuditActor = 'risk'): boolean {
     if (s.engineState === 'halted' && s.haltReason === reason) return false;
-    if (s.engineState === 'halted' && s.haltReason !== null && s.haltReason !== 'daily_loss_limit' && reason !== 'kill_switch') {
+    if (
+      s.engineState === 'halted' &&
+      s.haltReason !== null &&
+      s.haltReason !== 'daily_loss_limit' &&
+      reason !== 'kill_switch'
+    ) {
       // Keep the existing, stronger halt; record the additional trigger.
       this.event(tx, 'halt_additional_trigger', null, { reason, detail, activeReason: s.haltReason }, actor);
       return false;
@@ -377,7 +425,12 @@ export class PgRiskOfficer implements RiskOfficer {
     s.haltReason = reason;
     this.event(tx, 'halted', null, { reason, detail, previous }, actor);
     tx.alerts.push({
-      kind: reason === 'kill_switch' ? 'kill_switch' : reason === 'reconciliation_mismatch' ? 'reconciliation_error' : 'halt',
+      kind:
+        reason === 'kill_switch'
+          ? 'kill_switch'
+          : reason === 'reconciliation_mismatch'
+            ? 'reconciliation_error'
+            : 'halt',
       severity: 'critical',
       mode: this.tradingMode,
       title: reason === 'kill_switch' ? 'Kill switch used: selling all positions' : `Trading halted: ${reason}`,
@@ -411,7 +464,12 @@ export class PgRiskOfficer implements RiskOfficer {
     const ddLimit = bpsOf(s.peak, limits.maxDrawdownBps);
     if (s.peak > 0n && drawdown > 0n && drawdown >= ddLimit) {
       breached = 'drawdown_limit';
-      this.applyHalt(tx, s, 'drawdown_limit', `Drawdown ${drawdown} lamports from peak ${s.peak} reached the limit of ${ddLimit} lamports. Operator review required.`);
+      this.applyHalt(
+        tx,
+        s,
+        'drawdown_limit',
+        `Drawdown ${drawdown} lamports from peak ${s.peak} reached the limit of ${ddLimit} lamports. Operator review required.`,
+      );
     }
     return breached;
   }
@@ -431,18 +489,28 @@ export class PgRiskOfficer implements RiskOfficer {
 
   private validateRequest(req: ReservationRequest): string | null {
     if (!req || typeof req !== 'object') return 'invalid_request';
-    if (typeof req.idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(req.idempotencyKey)) return 'invalid_request:idempotency_key';
-    if (typeof req.sleeve !== 'string' || !SLEEVE_NAME.test(req.sleeve) || req.sleeve === WITHDRAWAL_SLEEVE) return 'invalid_request:sleeve';
+    if (typeof req.idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(req.idempotencyKey))
+      return 'invalid_request:idempotency_key';
+    if (typeof req.sleeve !== 'string' || !SLEEVE_NAME.test(req.sleeve) || req.sleeve === WITHDRAWAL_SLEEVE)
+      return 'invalid_request:sleeve';
     if (typeof req.mint !== 'string' || !Base58Address.safeParse(req.mint).success) return 'invalid_request:mint';
-    if (typeof req.lamports !== 'bigint' || req.lamports <= 0n || req.lamports >= MAX_LAMPORTS) return 'invalid_request:lamports';
+    if (typeof req.lamports !== 'bigint' || req.lamports <= 0n || req.lamports >= MAX_LAMPORTS)
+      return 'invalid_request:lamports';
     if (!req.candidate || req.candidate.mint !== req.mint) return 'invalid_request:candidate_mismatch';
-    if (typeof req.positionShareOfLiquidity !== 'number' || !Number.isFinite(req.positionShareOfLiquidity) || req.positionShareOfLiquidity < 0) {
+    if (
+      typeof req.positionShareOfLiquidity !== 'number' ||
+      !Number.isFinite(req.positionShareOfLiquidity) ||
+      req.positionShareOfLiquidity < 0
+    ) {
       return 'invalid_request:liquidity_share';
     }
     return null;
   }
 
-  private buyTicket(row: { id: string; mint: string; lamports: bigint; createdAt: Date; expiresAt: Date }, preset: Preset): SignedTicket | null {
+  private buyTicket(
+    row: { id: string; mint: string; lamports: bigint; createdAt: Date; expiresAt: Date },
+    preset: Preset,
+  ): SignedTicket | null {
     if (this.tradingMode !== 'live' || !this.ticketSecret) return null;
     const tip = preset.strategy.tipLamports;
     const ticket: ReservationTicket = {
@@ -463,8 +531,14 @@ export class PgRiskOfficer implements RiskOfficer {
     const invalid = this.validateRequest(req);
     if (invalid) {
       await this.audit.append({
-        actor: 'risk', type: 'reservation_vetoed', ref: null,
-        payload: { mode: this.tradingMode, reason: invalid, mint: typeof req?.mint === 'string' ? req.mint.slice(0, 64) : null },
+        actor: 'risk',
+        type: 'reservation_vetoed',
+        ref: null,
+        payload: {
+          mode: this.tradingMode,
+          reason: invalid,
+          mint: typeof req?.mint === 'string' ? req.mint.slice(0, 64) : null,
+        },
       });
       return { approved: false, reason: invalid };
     }
@@ -492,7 +566,10 @@ export class PgRiskOfficer implements RiskOfficer {
           approved: true,
           reservationId: prior.id,
           lamports,
-          ticket: this.buyTicket({ id: prior.id, mint: prior.mint, lamports, createdAt: prior.created_at, expiresAt: ticketExpiresAt }, this.presetOf(s)),
+          ticket: this.buyTicket(
+            { id: prior.id, mint: prior.mint, lamports, createdAt: prior.created_at, expiresAt: ticketExpiresAt },
+            this.presetOf(s),
+          ),
           expiresAt: ticketExpiresAt,
         };
       }
@@ -502,7 +579,8 @@ export class PgRiskOfficer implements RiskOfficer {
       );
       const pv = priorVeto.rows[0]?.payload;
       if (pv && typeof pv.reason === 'string') {
-        if (pv.mint === req.mint && pv.lamports === req.lamports.toString()) return { approved: false, reason: pv.reason };
+        if (pv.mint === req.mint && pv.lamports === req.lamports.toString())
+          return { approved: false, reason: pv.reason };
         return this.veto(tx, s, req, 'idempotency_key_conflict', false);
       }
 
@@ -522,10 +600,15 @@ export class PgRiskOfficer implements RiskOfficer {
       const breached = this.enforceLimits(tx, s, equity);
       if (breached) return this.veto(tx, s, req, breached);
       // 4. Cooldown for this mint.
-      const cd = await tx.client.query('SELECT 1 FROM cooldowns WHERE mode = $1 AND mint = $2 AND until > $3', [this.tradingMode, req.mint, tx.now]);
+      const cd = await tx.client.query('SELECT 1 FROM cooldowns WHERE mode = $1 AND mint = $2 AND until > $3', [
+        this.tradingMode,
+        req.mint,
+        tx.now,
+      ]);
       if (cd.rowCount) return this.veto(tx, s, req, 'cooldown');
       // 5. Max open positions (open + closing positions + held entry reservations).
-      if (book.openCount + book.closingCount + book.heldEntryCount >= limits.maxOpenPositions) return this.veto(tx, s, req, 'max_open_positions');
+      if (book.openCount + book.closingCount + book.heldEntryCount >= limits.maxOpenPositions)
+        return this.veto(tx, s, req, 'max_open_positions');
       // 6. Per-position cap.
       if (req.lamports > bpsOf(equity, limits.maxPositionBps)) return this.veto(tx, s, req, 'max_position_size');
       // 7. Per-token exposure cap (cost basis of open positions plus held reservations in this mint).
@@ -534,7 +617,8 @@ export class PgRiskOfficer implements RiskOfficer {
                + (SELECT coalesce(sum(lamports), 0) FROM reservations WHERE mode = $1 AND mint = $2 AND status = 'held'))::text AS exposure`,
         [this.tradingMode, req.mint],
       );
-      if (toBig(tok.rows[0]!.exposure) + req.lamports > bpsOf(equity, limits.maxPerTokenBps)) return this.veto(tx, s, req, 'max_token_exposure');
+      if (toBig(tok.rows[0]!.exposure) + req.lamports > bpsOf(equity, limits.maxPerTokenBps))
+        return this.veto(tx, s, req, 'max_token_exposure');
       // 8. Sleeve headroom.
       const sl = await tx.client.query<{ alloc_bps: number; used: string }>(
         `SELECT s.alloc_bps,
@@ -545,7 +629,8 @@ export class PgRiskOfficer implements RiskOfficer {
       );
       const sleeve = sl.rows[0];
       if (!sleeve) return this.veto(tx, s, req, 'unknown_sleeve');
-      if (toBig(sleeve.used) + req.lamports > bpsOf(equity, sleeve.alloc_bps)) return this.veto(tx, s, req, 'sleeve_headroom');
+      if (toBig(sleeve.used) + req.lamports > bpsOf(equity, sleeve.alloc_bps))
+        return this.veto(tx, s, req, 'sleeve_headroom');
       // 9. Free cash after fee reserve and held reservations.
       const free = s.cash - limits.feeReserveLamports - book.heldLamports;
       if (req.lamports > free) return this.veto(tx, s, req, 'insufficient_free_cash');
@@ -553,13 +638,21 @@ export class PgRiskOfficer implements RiskOfficer {
       let share = req.positionShareOfLiquidity;
       const solUsd = this.solUsd();
       const liq = req.candidate.safety?.liquidityUsd;
-      if (solUsd !== null && Number.isFinite(solUsd) && solUsd > 0 && typeof liq === 'number' && Number.isFinite(liq) && liq > 0) {
-        share = Math.max(share, (Number(req.lamports) / 1e9) * solUsd / liq);
+      if (
+        solUsd !== null &&
+        Number.isFinite(solUsd) &&
+        solUsd > 0 &&
+        typeof liq === 'number' &&
+        Number.isFinite(liq) &&
+        liq > 0
+      ) {
+        share = Math.max(share, ((Number(req.lamports) / 1e9) * solUsd) / liq);
       }
       if (share > filters.maxPositionShareOfLiquidity) return this.veto(tx, s, req, 'liquidity_share');
       // 11. Token safety re-check and candidate freshness.
       const expiresMs = Date.parse(req.candidate.expiresAt);
-      if (!Number.isFinite(expiresMs) || expiresMs <= tx.now.getTime()) return this.veto(tx, s, req, 'candidate_expired');
+      if (!Number.isFinite(expiresMs) || expiresMs <= tx.now.getTime())
+        return this.veto(tx, s, req, 'candidate_expired');
       const unsafe = tokenSafetyVeto(req.candidate, filters, tx.now);
       if (unsafe) return this.veto(tx, s, req, unsafe);
       // Live ticket preconditions.
@@ -574,13 +667,31 @@ export class PgRiskOfficer implements RiskOfficer {
       await tx.client.query(
         `INSERT INTO reservations (id, mode, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'held', $7, $8)`,
-        [id, this.tradingMode, req.idempotencyKey, req.sleeve, req.mint, req.lamports.toString(), tx.now, holdExpiresAt],
+        [
+          id,
+          this.tradingMode,
+          req.idempotencyKey,
+          req.sleeve,
+          req.mint,
+          req.lamports.toString(),
+          tx.now,
+          holdExpiresAt,
+        ],
       );
       await this.saveState(tx, s);
       this.event(tx, 'reservation_approved', id, {
-        idempotencyKey: req.idempotencyKey, sleeve: req.sleeve, mint: req.mint, symbol: req.candidate.symbol,
-        lamports: req.lamports, score: req.candidate.score, equity, freeCashBefore: free, liquidityShare: share,
-        expiresAt: expiresAt.toISOString(), holdExpiresAt: holdExpiresAt.toISOString(), preset: preset.name,
+        idempotencyKey: req.idempotencyKey,
+        sleeve: req.sleeve,
+        mint: req.mint,
+        symbol: req.candidate.symbol,
+        lamports: req.lamports,
+        score: req.candidate.score,
+        equity,
+        freeCashBefore: free,
+        liquidityShare: share,
+        expiresAt: expiresAt.toISOString(),
+        holdExpiresAt: holdExpiresAt.toISOString(),
+        preset: preset.name,
       });
       return {
         approved: true,
@@ -592,30 +703,45 @@ export class PgRiskOfficer implements RiskOfficer {
     });
   }
 
-  private async veto(tx: Tx, s: StateRow, req: ReservationRequest, reason: string, recordForReplay = true): Promise<ReservationDecision> {
+  private async veto(
+    tx: Tx,
+    s: StateRow,
+    req: ReservationRequest,
+    reason: string,
+    recordForReplay = true,
+  ): Promise<ReservationDecision> {
     await this.saveState(tx, s);
     this.event(tx, 'reservation_vetoed', recordForReplay ? this.idemRef(req.idempotencyKey) : null, {
-      reason, idempotencyKey: req.idempotencyKey, sleeve: req.sleeve, mint: req.mint, symbol: req.candidate?.symbol ?? null,
-      lamports: req.lamports.toString(), score: req.candidate?.score ?? null,
+      reason,
+      idempotencyKey: req.idempotencyKey,
+      sleeve: req.sleeve,
+      mint: req.mint,
+      symbol: req.candidate?.symbol ?? null,
+      lamports: req.lamports.toString(),
+      score: req.candidate?.score ?? null,
     });
     return { approved: false, reason };
   }
 
   async recordFill(fill: FillReport): Promise<{ positionId: string }> {
-    if (!fill || typeof fill.reservationId !== 'string' || !UUID.test(fill.reservationId)) throw new RiskError('invalid reservationId');
+    if (!fill || typeof fill.reservationId !== 'string' || !UUID.test(fill.reservationId))
+      throw new RiskError('invalid reservationId');
     const spent = assertLamports(fill.lamportsSpent, 'lamportsSpent');
     const tokens = assertLamports(fill.tokenAmount, 'tokenAmount', true);
     // The fill already happened on chain, so descriptive fields are cleaned up rather than rejected:
     // a token symbol comes from untrusted token metadata and must not make the buy unbookable.
-    const priceOk = typeof fill.entryPriceUsd === 'number' && Number.isFinite(fill.entryPriceUsd) && fill.entryPriceUsd >= 0;
+    const priceOk =
+      typeof fill.entryPriceUsd === 'number' && Number.isFinite(fill.entryPriceUsd) && fill.entryPriceUsd >= 0;
     const entryPriceUsd = priceOk ? fill.entryPriceUsd : 0;
     const symbol = cleanSymbol(fill.symbol);
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const r = (await tx.client.query<ReservationRow>(
-        'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
-        [fill.reservationId, this.tradingMode],
-      )).rows[0];
+      const r = (
+        await tx.client.query<ReservationRow>(
+          'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [fill.reservationId, this.tradingMode],
+        )
+      ).rows[0];
       if (!r) throw new RiskError('unknown reservation');
       if (r.sleeve === WITHDRAWAL_SLEEVE) throw new RiskError('reservation is a withdrawal hold');
       if (r.status === 'filled') {
@@ -633,20 +759,47 @@ export class PgRiskOfficer implements RiskOfficer {
       await tx.client.query(
         `INSERT INTO positions (id, mode, reservation_id, mint, symbol, strategy, status, entry_lamports, token_amount, entry_price_usd, opened_at, config_version)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [positionId, this.tradingMode, r.id, r.mint, symbol, r.sleeve, killActive ? 'closing' : 'open', spent.toString(), tokens.toString(), entryPriceUsd, tx.now, this.cfg.configVersion],
+        [
+          positionId,
+          this.tradingMode,
+          r.id,
+          r.mint,
+          symbol,
+          r.sleeve,
+          killActive ? 'closing' : 'open',
+          spent.toString(),
+          tokens.toString(),
+          entryPriceUsd,
+          tx.now,
+          this.cfg.configVersion,
+        ],
       );
       await tx.client.query(`UPDATE reservations SET status = 'filled', settled_at = $2 WHERE id = $1`, [r.id, tx.now]);
       await this.ledger(tx, 'buy', -spent, positionId, `reservation ${r.id}`);
       await this.saveState(tx, s);
       this.event(tx, 'reservation_filled', positionId, {
-        reservationId: r.id, orderId: fill.orderId, mint: r.mint, symbol, strategy: r.sleeve,
-        lamportsSpent: spent, reservedLamports: reserved, remainderReleased: reserved > spent ? reserved - spent : 0n,
-        tokenAmount: tokens, entryPriceUsd, entryPriceInvalid: !priceOk, signature: fill.signature, lateFill: late, priorStatus: r.status,
+        reservationId: r.id,
+        orderId: fill.orderId,
+        mint: r.mint,
+        symbol,
+        strategy: r.sleeve,
+        lamportsSpent: spent,
+        reservedLamports: reserved,
+        remainderReleased: reserved > spent ? reserved - spent : 0n,
+        tokenAmount: tokens,
+        entryPriceUsd,
+        entryPriceInvalid: !priceOk,
+        signature: fill.signature,
+        lateFill: late,
+        priorStatus: r.status,
         configVersion: this.cfg.configVersion,
       });
       if (late || spent > reserved) {
         tx.alerts.push({
-          kind: 'accounting_warning', severity: 'warning', mode: this.tradingMode, title: 'Fill outside a held reservation',
+          kind: 'accounting_warning',
+          severity: 'warning',
+          mode: this.tradingMode,
+          title: 'Fill outside a held reservation',
           body: `Reservation ${r.id} was ${r.status}; spent ${spent} of ${reserved} reserved lamports. The position was booked.`,
         });
       }
@@ -654,23 +807,28 @@ export class PgRiskOfficer implements RiskOfficer {
     });
   }
 
-  async release(reservationId: string, reason: string, burnedFeeLamports: bigint = 0n): Promise<void> {
+  async release(reservationId: string, reason: string, burnedFeeLamports = 0n): Promise<void> {
     if (typeof reservationId !== 'string' || !UUID.test(reservationId)) throw new RiskError('invalid reservationId');
     const burned = assertLamports(burnedFeeLamports, 'burnedFeeLamports', true);
     const why = String(reason ?? '').slice(0, 300);
     await this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const r = (await tx.client.query<ReservationRow>(
-        'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
-        [reservationId, this.tradingMode],
-      )).rows[0];
+      const r = (
+        await tx.client.query<ReservationRow>(
+          'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [reservationId, this.tradingMode],
+        )
+      ).rows[0];
       if (!r) throw new RiskError('unknown reservation');
       if (r.status === 'filled') throw new RiskError('reservation already filled');
       const reserved = toBig(r.lamports);
       if (burned > reserved) throw new RiskError('burned fee exceeds the reservation');
       let feeBooked = false;
       if (burned > 0n) {
-        const dup = await tx.client.query(`SELECT 1 FROM ledger_entries WHERE mode = $1 AND kind = 'fee' AND ref = $2`, [this.tradingMode, r.id]);
+        const dup = await tx.client.query(
+          `SELECT 1 FROM ledger_entries WHERE mode = $1 AND kind = 'fee' AND ref = $2`,
+          [this.tradingMode, r.id],
+        );
         if (!dup.rowCount) {
           if (burned > s.cash) throw new RiskError('burned fee exceeds booked cash');
           await this.rollOnCurrentBook(tx, s);
@@ -681,7 +839,10 @@ export class PgRiskOfficer implements RiskOfficer {
       }
       if (r.status !== 'held' && !feeBooked) return; // idempotent
       if (r.status === 'held') {
-        await tx.client.query(`UPDATE reservations SET status = 'released', settled_at = $2 WHERE id = $1`, [r.id, tx.now]);
+        await tx.client.query(`UPDATE reservations SET status = 'released', settled_at = $2 WHERE id = $1`, [
+          r.id,
+          tx.now,
+        ]);
       }
       if (feeBooked) {
         const book = await loadBookTotals(tx.client, this.tradingMode);
@@ -690,7 +851,13 @@ export class PgRiskOfficer implements RiskOfficer {
         this.enforceLimits(tx, s, equity);
       }
       await this.saveState(tx, s);
-      this.event(tx, 'reservation_released', r.id, { reason: why, burnedFeeLamports: feeBooked ? burned : 0n, lamports: reserved, priorStatus: r.status, mint: r.mint });
+      this.event(tx, 'reservation_released', r.id, {
+        reason: why,
+        burnedFeeLamports: feeBooked ? burned : 0n,
+        lamports: reserved,
+        priorStatus: r.status,
+        mint: r.mint,
+      });
     });
   }
 
@@ -711,9 +878,12 @@ export class PgRiskOfficer implements RiskOfficer {
     if (!EXIT_REASONS.has(reason)) throw new RiskError('invalid exit reason');
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const p = (await tx.client.query<{ id: string; mint: string; status: string }>(
-        'SELECT id, mint, status FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE', [positionId, this.tradingMode],
-      )).rows[0];
+      const p = (
+        await tx.client.query<{ id: string; mint: string; status: string }>(
+          'SELECT id, mint, status FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [positionId, this.tradingMode],
+        )
+      ).rows[0];
       if (!p) throw new RiskError('unknown position');
       if (p.status === 'closed') throw new RiskError('position already closed');
       if (p.status === 'open') await tx.client.query(`UPDATE positions SET status = 'closing' WHERE id = $1`, [p.id]);
@@ -721,12 +891,20 @@ export class PgRiskOfficer implements RiskOfficer {
       let ticketId: string | null = null;
       if (this.tradingMode === 'live' && this.ticketSecret) {
         ticketId = randomUUID();
-        ticket = signTicket({
-          v: 1, reservationId: ticketId, intent: 'sell', mint: p.mint,
-          maxLamports: this.cfg.exitFeeAllowanceLamports.toString(),
-          maxTipLamports: this.presetOf(s).strategy.tipLamports.toString(),
-          destination: null, issuedAt: tx.now.getTime(), expiresAt: tx.now.getTime() + this.cfg.exitTicketTtlMs,
-        }, this.ticketSecret);
+        ticket = signTicket(
+          {
+            v: 1,
+            reservationId: ticketId,
+            intent: 'sell',
+            mint: p.mint,
+            maxLamports: this.cfg.exitFeeAllowanceLamports.toString(),
+            maxTipLamports: this.presetOf(s).strategy.tipLamports.toString(),
+            destination: null,
+            issuedAt: tx.now.getTime(),
+            expiresAt: tx.now.getTime() + this.cfg.exitTicketTtlMs,
+          },
+          this.ticketSecret,
+        );
       }
       this.event(tx, 'exit_authorized', p.id, { reason, mint: p.mint, ticketId, haltState: s.engineState });
       return { ticket };
@@ -734,15 +912,25 @@ export class PgRiskOfficer implements RiskOfficer {
   }
 
   async recordExit(exit: ExitReport): Promise<{ realizedPnlLamports: bigint }> {
-    if (!exit || typeof exit.positionId !== 'string' || !UUID.test(exit.positionId)) throw new RiskError('invalid positionId');
+    if (!exit || typeof exit.positionId !== 'string' || !UUID.test(exit.positionId))
+      throw new RiskError('invalid positionId');
     const received = assertLamports(exit.lamportsReceived, 'lamportsReceived', true);
     if (!EXIT_REASONS.has(exit.reason)) throw new RiskError('invalid exit reason');
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const p = (await tx.client.query<{ id: string; mint: string; symbol: string; status: string; entry_lamports: string; realized_pnl_lamports: string | null }>(
-        'SELECT id, mint, symbol, status, entry_lamports, realized_pnl_lamports FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE',
-        [exit.positionId, this.tradingMode],
-      )).rows[0];
+      const p = (
+        await tx.client.query<{
+          id: string;
+          mint: string;
+          symbol: string;
+          status: string;
+          entry_lamports: string;
+          realized_pnl_lamports: string | null;
+        }>(
+          'SELECT id, mint, symbol, status, entry_lamports, realized_pnl_lamports FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [exit.positionId, this.tradingMode],
+        )
+      ).rows[0];
       if (!p) throw new RiskError('unknown position');
       if (p.status === 'closed') return { realizedPnlLamports: toBig(p.realized_pnl_lamports) };
       const entry = toBig(p.entry_lamports);
@@ -768,8 +956,15 @@ export class PgRiskOfficer implements RiskOfficer {
       this.enforceLimits(tx, s, equity);
       await this.saveState(tx, s);
       this.event(tx, 'position_closed', p.id, {
-        orderId: exit.orderId, mint: p.mint, symbol: p.symbol, reason: exit.reason, entryLamports: entry,
-        lamportsReceived: received, realizedPnlLamports: realized, signature: exit.signature, equity,
+        orderId: exit.orderId,
+        mint: p.mint,
+        symbol: p.symbol,
+        reason: exit.reason,
+        entryLamports: entry,
+        lamportsReceived: received,
+        realizedPnlLamports: realized,
+        signature: exit.signature,
+        equity,
       });
       return { realizedPnlLamports: realized };
     });
@@ -781,9 +976,12 @@ export class PgRiskOfficer implements RiskOfficer {
     const burned = assertLamports(burnedFeeLamports, 'burnedFeeLamports', true);
     await this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const p = (await tx.client.query<{ id: string; status: string }>(
-        'SELECT id, status FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE', [positionId, this.tradingMode],
-      )).rows[0];
+      const p = (
+        await tx.client.query<{ id: string; status: string }>(
+          'SELECT id, status FROM positions WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [positionId, this.tradingMode],
+        )
+      ).rows[0];
       if (!p) throw new RiskError('unknown position');
       if (burned > s.cash) throw new RiskError('burned fee exceeds booked cash');
       await this.rollOnCurrentBook(tx, s);
@@ -798,11 +996,12 @@ export class PgRiskOfficer implements RiskOfficer {
     });
   }
 
-  async markPositions(marks: Array<{ positionId: string; markLamports: bigint }>): Promise<void> {
+  async markPositions(marks: { positionId: string; markLamports: bigint }[]): Promise<void> {
     const ids: string[] = [];
     const vals: string[] = [];
     for (const m of marks) {
-      if (typeof m.positionId !== 'string' || !UUID.test(m.positionId)) throw new RiskError('invalid positionId in marks');
+      if (typeof m.positionId !== 'string' || !UUID.test(m.positionId))
+        throw new RiskError('invalid positionId in marks');
       ids.push(m.positionId);
       vals.push(assertLamports(m.markLamports, 'markLamports', true).toString());
     }
@@ -831,17 +1030,32 @@ export class PgRiskOfficer implements RiskOfficer {
 
   async openPositions(): Promise<OpenPositionDetail[]> {
     const res = await this.pool.query<{
-      id: string; mint: string; symbol: string; strategy: string; status: 'open' | 'closing'; entry_lamports: string;
-      token_amount: string; entry_price_usd: number; opened_at: Date; mark_lamports: string | null;
+      id: string;
+      mint: string;
+      symbol: string;
+      strategy: string;
+      status: 'open' | 'closing';
+      entry_lamports: string;
+      token_amount: string;
+      entry_price_usd: number;
+      opened_at: Date;
+      mark_lamports: string | null;
     }>(
       `SELECT id, mint, symbol, strategy, status, entry_lamports, token_amount::text AS token_amount, entry_price_usd, opened_at, mark_lamports
          FROM positions WHERE mode = $1 AND status <> 'closed' ORDER BY opened_at`,
       [this.tradingMode],
     );
     return res.rows.map((r) => ({
-      id: r.id, mint: r.mint, symbol: r.symbol, strategy: r.strategy, status: r.status,
-      entryLamports: toBig(r.entry_lamports), tokenAmount: toBig(r.token_amount), entryPriceUsd: r.entry_price_usd,
-      openedAt: r.opened_at, markLamports: toBigOrNull(r.mark_lamports),
+      id: r.id,
+      mint: r.mint,
+      symbol: r.symbol,
+      strategy: r.strategy,
+      status: r.status,
+      entryLamports: toBig(r.entry_lamports),
+      tokenAmount: toBig(r.token_amount),
+      entryPriceUsd: r.entry_price_usd,
+      openedAt: r.opened_at,
+      markLamports: toBigOrNull(r.mark_lamports),
     }));
   }
 
@@ -863,7 +1077,11 @@ export class PgRiskOfficer implements RiskOfficer {
       const book = await loadBookTotals(tx.client, this.tradingMode);
       this.rollDay(tx, s, s.cash + book.inPositionsLamports);
       await this.saveState(tx, s);
-      if (s.engineState !== 'running') return { ok: false, reason: s.engineState === 'halted' ? `halted:${s.haltReason ?? 'unknown'}` : `engine_${s.engineState}` };
+      if (s.engineState !== 'running')
+        return {
+          ok: false,
+          reason: s.engineState === 'halted' ? `halted:${s.haltReason ?? 'unknown'}` : `engine_${s.engineState}`,
+        };
       if (s.haltReason) return { ok: false, reason: `halted:${s.haltReason}` };
       return { ok: true, reason: null };
     });
@@ -875,7 +1093,8 @@ export class PgRiskOfficer implements RiskOfficer {
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
       if ((await this.activeMode(tx.client)) !== this.tradingMode) return { ok: false, reason: 'mode_not_active' };
-      if (s.engineState === 'halted' && s.haltReason !== 'daily_loss_limit') return { ok: false, reason: `halted:${s.haltReason ?? 'unknown'}` };
+      if (s.engineState === 'halted' && s.haltReason !== 'daily_loss_limit')
+        return { ok: false, reason: `halted:${s.haltReason ?? 'unknown'}` };
       if (this.tradingMode === 'paper' && this.cfg.paperStartingLamports > 0n) {
         const any = await tx.client.query('SELECT 1 FROM ledger_entries WHERE mode = $1 LIMIT 1', [this.tradingMode]);
         if (!any.rowCount) await this.fundInTx(tx, s, this.cfg.paperStartingLamports, actor);
@@ -902,12 +1121,19 @@ export class PgRiskOfficer implements RiskOfficer {
   private async transition(target: 'paused' | 'stopped', actor: AuditActor): Promise<ControlResult> {
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
-      if (s.engineState === 'halted' && s.haltReason !== 'daily_loss_limit') return { ok: false, reason: `halted:${s.haltReason ?? 'unknown'}` };
+      if (s.engineState === 'halted' && s.haltReason !== 'daily_loss_limit')
+        return { ok: false, reason: `halted:${s.haltReason ?? 'unknown'}` };
       if (s.engineState === target) return { ok: true, state: s.engineState, haltReason: s.haltReason };
       const previous = s.engineState;
       s.engineState = target; // a daily loss marker stays in halt_reason until the next UTC day
       await this.saveState(tx, s);
-      this.event(tx, target === 'paused' ? 'engine_paused' : 'engine_stopped', null, { previous, haltReason: s.haltReason }, actor);
+      this.event(
+        tx,
+        target === 'paused' ? 'engine_paused' : 'engine_stopped',
+        null,
+        { previous, haltReason: s.haltReason },
+        actor,
+      );
       return { ok: true, state: s.engineState, haltReason: s.haltReason };
     });
   }
@@ -924,15 +1150,27 @@ export class PgRiskOfficer implements RiskOfficer {
         `UPDATE reservations SET status = 'released', settled_at = $2 WHERE mode = $1 AND status = 'held' AND sleeve <> $3 RETURNING id`,
         [this.tradingMode, tx.now, WITHDRAWAL_SLEEVE],
       );
-      await tx.client.query(`UPDATE positions SET status = 'closing' WHERE mode = $1 AND status = 'open'`, [this.tradingMode]);
-      const closing = await tx.client.query<{ n: string }>(`SELECT count(*)::text AS n FROM positions WHERE mode = $1 AND status = 'closing'`, [this.tradingMode]);
+      await tx.client.query(`UPDATE positions SET status = 'closing' WHERE mode = $1 AND status = 'open'`, [
+        this.tradingMode,
+      ]);
+      const closing = await tx.client.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM positions WHERE mode = $1 AND status = 'closing'`,
+        [this.tradingMode],
+      );
       const positionsClosing = Number(closing.rows[0]!.n);
-      const changed = this.applyHalt(tx, s, 'kill_switch', `Kill switch by ${actor}: ${positionsClosing} position(s) being sold, ${rel.rowCount ?? 0} reservation(s) released.`, actor);
+      const changed = this.applyHalt(
+        tx,
+        s,
+        'kill_switch',
+        `Kill switch by ${actor}: ${positionsClosing} position(s) being sold, ${rel.rowCount ?? 0} reservation(s) released.`,
+        actor,
+      );
       if (!changed) {
         // Already halted by the kill switch; still count as a fresh trigger in the log.
         this.event(tx, 'kill_switch_repeated', null, { positionsClosing }, actor);
       }
-      for (const r of rel.rows) this.event(tx, 'reservation_released', r.id, { reason: 'kill_switch', burnedFeeLamports: '0' }, actor);
+      for (const r of rel.rows)
+        this.event(tx, 'reservation_released', r.id, { reason: 'kill_switch', burnedFeeLamports: '0' }, actor);
       await this.saveState(tx, s);
       return { positionsClosing, reservationsReleased: rel.rowCount ?? 0 };
     });
@@ -955,7 +1193,13 @@ export class PgRiskOfficer implements RiskOfficer {
       if (s.engineState === 'halted') s.engineState = 'paused';
       await this.saveState(tx, s);
       this.event(tx, 'halt_cleared', null, { cleared, reason: why, equity, newPeak: s.peak, newSod: s.sod }, actor);
-      tx.alerts.push({ kind: 'halt_cleared', severity: 'warning', mode: this.tradingMode, title: `Halt cleared by ${actor}`, body: `Cleared ${cleared ?? 'halt'}: ${why}. Engine is ${s.engineState}.` });
+      tx.alerts.push({
+        kind: 'halt_cleared',
+        severity: 'warning',
+        mode: this.tradingMode,
+        title: `Halt cleared by ${actor}`,
+        body: `Cleared ${cleared ?? 'halt'}: ${why}. Engine is ${s.engineState}.`,
+      });
       return { ok: true, state: s.engineState, haltReason: s.haltReason };
     });
   }
@@ -965,7 +1209,11 @@ export class PgRiskOfficer implements RiskOfficer {
    * and the exact confirmation phrase. Refused while the current mode has open positions or held
    * reservations. The previous mode is stopped (unless halted).
    */
-  async setMode(target: TradingMode, confirm: string | undefined, actor: AuditActor = 'owner'): Promise<{ ok: true; mode: TradingMode } | { ok: false; reason: string }> {
+  async setMode(
+    target: TradingMode,
+    confirm: string | undefined,
+    actor: AuditActor = 'owner',
+  ): Promise<{ ok: true; mode: TradingMode } | { ok: false; reason: string }> {
     if (target !== 'paper' && target !== 'live') return { ok: false, reason: 'invalid_mode' };
     if (target === 'live') {
       if (!this.cfg.liveTradingEnabled) return { ok: false, reason: 'live_trading_disabled' };
@@ -975,20 +1223,37 @@ export class PgRiskOfficer implements RiskOfficer {
     const result = await this.run(async (tx) => {
       const current = await this.activeMode(tx.client);
       if (current === target) return { ok: true as const, mode: target, changed: false };
-      const st = (await tx.client.query<{ engine_state: EngineState }>('SELECT engine_state FROM pool_state WHERE mode = $1 FOR UPDATE', [current])).rows[0];
-      const settings = (await tx.client.query<{ active_mode: TradingMode }>('SELECT active_mode FROM settings WHERE id = 1 FOR UPDATE')).rows[0];
-      if (!settings || settings.active_mode !== current) return { ok: false as const, reason: 'concurrent_mode_change' };
+      const st = (
+        await tx.client.query<{ engine_state: EngineState }>(
+          'SELECT engine_state FROM pool_state WHERE mode = $1 FOR UPDATE',
+          [current],
+        )
+      ).rows[0];
+      const settings = (
+        await tx.client.query<{ active_mode: TradingMode }>('SELECT active_mode FROM settings WHERE id = 1 FOR UPDATE')
+      ).rows[0];
+      if (!settings || settings.active_mode !== current)
+        return { ok: false as const, reason: 'concurrent_mode_change' };
       const busy = await tx.client.query<{ n: string }>(
         `SELECT ((SELECT count(*) FROM positions WHERE mode = $1 AND status <> 'closed') + (SELECT count(*) FROM reservations WHERE mode = $1 AND status = 'held'))::text AS n`,
         [current],
       );
       if (Number(busy.rows[0]!.n) > 0) return { ok: false as const, reason: 'open_positions_or_reservations' };
       if (st && (st.engine_state === 'running' || st.engine_state === 'paused')) {
-        await tx.client.query(`UPDATE pool_state SET engine_state = 'stopped', updated_at = $2 WHERE mode = $1`, [current, tx.now]);
+        await tx.client.query(`UPDATE pool_state SET engine_state = 'stopped', updated_at = $2 WHERE mode = $1`, [
+          current,
+          tx.now,
+        ]);
       }
       await tx.client.query('UPDATE settings SET active_mode = $1, updated_at = $2 WHERE id = 1', [target, tx.now]);
       tx.events.push({ actor, type: 'mode_changed', ref: null, payload: { from: current, to: target } });
-      tx.alerts.push({ kind: 'mode_change', severity: target === 'live' ? 'critical' : 'warning', mode: target, title: `Mode switched to ${target.toUpperCase()}`, body: `Switched from ${current} to ${target} by ${actor}.` });
+      tx.alerts.push({
+        kind: 'mode_change',
+        severity: target === 'live' ? 'critical' : 'warning',
+        mode: target,
+        title: `Mode switched to ${target.toUpperCase()}`,
+        body: `Switched from ${current} to ${target} by ${actor}.`,
+      });
       return { ok: true as const, mode: target, changed: true };
     });
     return result.ok ? { ok: true, mode: result.mode } : result;
@@ -1026,10 +1291,14 @@ export class PgRiskOfficer implements RiskOfficer {
    */
   async bookDeposit(lamports: bigint, signature: string, actor: AuditActor = 'system'): Promise<{ booked: boolean }> {
     const amount = assertLamports(lamports, 'lamports');
-    if (typeof signature !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]{32,100}$/.test(signature)) throw new RiskError('invalid signature');
+    if (typeof signature !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]{32,100}$/.test(signature))
+      throw new RiskError('invalid signature');
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const dup = await tx.client.query(`SELECT 1 FROM ledger_entries WHERE mode = $1 AND kind = 'deposit' AND ref = $2`, [this.tradingMode, signature]);
+      const dup = await tx.client.query(
+        `SELECT 1 FROM ledger_entries WHERE mode = $1 AND kind = 'deposit' AND ref = $2`,
+        [this.tradingMode, signature],
+      );
       if (dup.rowCount) return { booked: false };
       const book = await loadBookTotals(tx.client, this.tradingMode);
       this.rollDay(tx, s, s.cash + book.inPositionsLamports);
@@ -1039,7 +1308,13 @@ export class PgRiskOfficer implements RiskOfficer {
       await this.ledger(tx, 'deposit', amount, signature, 'on-chain deposit');
       await this.saveState(tx, s);
       this.event(tx, 'deposit_booked', signature, { lamports: amount }, actor);
-      tx.alerts.push({ kind: 'withdrawal', severity: 'info', mode: this.tradingMode, title: 'Deposit received', body: `${amount} lamports booked to the pool.` });
+      tx.alerts.push({
+        kind: 'withdrawal',
+        severity: 'info',
+        mode: this.tradingMode,
+        title: 'Deposit received',
+        body: `${amount} lamports booked to the pool.`,
+      });
       return { booked: true };
     });
   }
@@ -1047,7 +1322,10 @@ export class PgRiskOfficer implements RiskOfficer {
   async setDepositAddress(address: string, actor: AuditActor = 'system'): Promise<void> {
     if (!isValidAddress(address)) throw new RiskError('invalid address');
     await this.run(async (tx) => {
-      await tx.client.query('UPDATE settings SET deposit_address = $1, updated_at = $2 WHERE id = 1', [address, tx.now]);
+      await tx.client.query('UPDATE settings SET deposit_address = $1, updated_at = $2 WHERE id = 1', [
+        address,
+        tx.now,
+      ]);
       tx.events.push({ actor, type: 'deposit_address_set', ref: null, payload: { address } });
     });
   }
@@ -1057,16 +1335,28 @@ export class PgRiskOfficer implements RiskOfficer {
    * while no address exists and the active mode is paper; every other change is pending for the
    * timelock (24 h by default) and alerts the owner.
    */
-  async setWithdrawAddress(address: string, actor: AuditActor = 'owner'): Promise<{ status: 'active' | 'pending'; address: string; effectiveAt: Date }> {
+  async setWithdrawAddress(
+    address: string,
+    actor: AuditActor = 'owner',
+  ): Promise<{ status: 'active' | 'pending'; address: string; effectiveAt: Date }> {
     if (!isValidAddress(address)) throw new RiskError('invalid address');
     return this.run(async (tx) => {
-      const st = (await tx.client.query<{ active_mode: TradingMode; withdraw_address: string | null; pending_withdraw_address: string | null }>(
-        'SELECT active_mode, withdraw_address, pending_withdraw_address FROM settings WHERE id = 1 FOR UPDATE',
-      )).rows[0]!;
-      if (st.withdraw_address === address && st.pending_withdraw_address === null) return { status: 'active' as const, address, effectiveAt: tx.now };
-      const immediate = st.withdraw_address === null && st.pending_withdraw_address === null && st.active_mode === 'paper';
+      const st = (
+        await tx.client.query<{
+          active_mode: TradingMode;
+          withdraw_address: string | null;
+          pending_withdraw_address: string | null;
+        }>('SELECT active_mode, withdraw_address, pending_withdraw_address FROM settings WHERE id = 1 FOR UPDATE')
+      ).rows[0]!;
+      if (st.withdraw_address === address && st.pending_withdraw_address === null)
+        return { status: 'active' as const, address, effectiveAt: tx.now };
+      const immediate =
+        st.withdraw_address === null && st.pending_withdraw_address === null && st.active_mode === 'paper';
       if (immediate) {
-        await tx.client.query('UPDATE settings SET withdraw_address = $1, updated_at = $2 WHERE id = 1', [address, tx.now]);
+        await tx.client.query('UPDATE settings SET withdraw_address = $1, updated_at = $2 WHERE id = 1', [
+          address,
+          tx.now,
+        ]);
       } else {
         const effective = new Date(tx.now.getTime() + this.cfg.withdrawTimelockMs);
         await tx.client.query(
@@ -1075,9 +1365,21 @@ export class PgRiskOfficer implements RiskOfficer {
         );
       }
       const effectiveAt = immediate ? tx.now : new Date(tx.now.getTime() + this.cfg.withdrawTimelockMs);
-      tx.events.push({ actor, type: 'withdraw_address_change_requested', ref: withdrawAddressRef(address), payload: { address, previous: st.withdraw_address, status: immediate ? 'active' : 'pending', effectiveAt: effectiveAt.toISOString() } });
+      tx.events.push({
+        actor,
+        type: 'withdraw_address_change_requested',
+        ref: withdrawAddressRef(address),
+        payload: {
+          address,
+          previous: st.withdraw_address,
+          status: immediate ? 'active' : 'pending',
+          effectiveAt: effectiveAt.toISOString(),
+        },
+      });
       tx.alerts.push({
-        kind: 'withdraw_address_change', severity: 'critical', mode: st.active_mode,
+        kind: 'withdraw_address_change',
+        severity: 'critical',
+        mode: st.active_mode,
         title: immediate ? 'Withdrawal address set' : 'Withdrawal address change requested',
         body: immediate
           ? `Withdrawals may now go to ${address}.`
@@ -1093,16 +1395,39 @@ export class PgRiskOfficer implements RiskOfficer {
   }
 
   private async promoteInTx(tx: Tx): Promise<boolean> {
-    const st = (await tx.client.query<{ active_mode: TradingMode; withdraw_address: string | null; pending_withdraw_address: string | null; pending_withdraw_effective_at: Date | null }>(
-      'SELECT active_mode, withdraw_address, pending_withdraw_address, pending_withdraw_effective_at FROM settings WHERE id = 1 FOR UPDATE',
-    )).rows[0]!;
-    if (!st.pending_withdraw_address || !st.pending_withdraw_effective_at || st.pending_withdraw_effective_at.getTime() > tx.now.getTime()) return false;
+    const st = (
+      await tx.client.query<{
+        active_mode: TradingMode;
+        withdraw_address: string | null;
+        pending_withdraw_address: string | null;
+        pending_withdraw_effective_at: Date | null;
+      }>(
+        'SELECT active_mode, withdraw_address, pending_withdraw_address, pending_withdraw_effective_at FROM settings WHERE id = 1 FOR UPDATE',
+      )
+    ).rows[0]!;
+    if (
+      !st.pending_withdraw_address ||
+      !st.pending_withdraw_effective_at ||
+      st.pending_withdraw_effective_at.getTime() > tx.now.getTime()
+    )
+      return false;
     await tx.client.query(
       'UPDATE settings SET withdraw_address = pending_withdraw_address, pending_withdraw_address = NULL, pending_withdraw_effective_at = NULL, updated_at = $1 WHERE id = 1',
       [tx.now],
     );
-    tx.events.push({ actor: 'risk', type: 'withdraw_address_activated', ref: withdrawAddressRef(st.pending_withdraw_address), payload: { address: st.pending_withdraw_address, previous: st.withdraw_address } });
-    tx.alerts.push({ kind: 'withdraw_address_change', severity: 'critical', mode: st.active_mode, title: 'Withdrawal address changed', body: `Withdrawals now go to ${st.pending_withdraw_address}.` });
+    tx.events.push({
+      actor: 'risk',
+      type: 'withdraw_address_activated',
+      ref: withdrawAddressRef(st.pending_withdraw_address),
+      payload: { address: st.pending_withdraw_address, previous: st.withdraw_address },
+    });
+    tx.alerts.push({
+      kind: 'withdraw_address_change',
+      severity: 'critical',
+      mode: st.active_mode,
+      title: 'Withdrawal address changed',
+      body: `Withdrawals now go to ${st.pending_withdraw_address}.`,
+    });
     return true;
   }
 
@@ -1113,7 +1438,10 @@ export class PgRiskOfficer implements RiskOfficer {
       );
       const pending = r.rows[0]?.pending_withdraw_address ?? null;
       if (!pending) return false;
-      await tx.client.query('UPDATE settings SET pending_withdraw_address = NULL, pending_withdraw_effective_at = NULL, updated_at = $1 WHERE id = 1', [tx.now]);
+      await tx.client.query(
+        'UPDATE settings SET pending_withdraw_address = NULL, pending_withdraw_effective_at = NULL, updated_at = $1 WHERE id = 1',
+        [tx.now],
+      );
       tx.events.push({ actor, type: 'withdraw_address_change_cancelled', ref: null, payload: { address: pending } });
       return true;
     });
@@ -1134,7 +1462,9 @@ export class PgRiskOfficer implements RiskOfficer {
     return this.run(async (tx) => {
       const s = await this.lockState(tx);
       const promoted = await this.promoteInTx(tx);
-      const st = (await tx.client.query<{ withdraw_address: string | null }>('SELECT withdraw_address FROM settings WHERE id = 1')).rows[0]!;
+      const st = (
+        await tx.client.query<{ withdraw_address: string | null }>('SELECT withdraw_address FROM settings WHERE id = 1')
+      ).rows[0]!;
       const destination = st.withdraw_address;
       if (!destination) {
         this.event(tx, 'withdrawal_refused', null, { lamports: amount, reason: 'no_withdraw_address' }, actor);
@@ -1143,7 +1473,13 @@ export class PgRiskOfficer implements RiskOfficer {
       // An address set without a timelock (allowed only for the first address while paper mode is
       // active) must not become a live destination before the timelock would have passed.
       if (this.tradingMode === 'live' && !promoted && !(await this.addressPassedTimelock(tx, destination))) {
-        this.event(tx, 'withdrawal_refused', null, { lamports: amount, reason: 'withdraw_address_timelocked', destination }, actor);
+        this.event(
+          tx,
+          'withdrawal_refused',
+          null,
+          { lamports: amount, reason: 'withdraw_address_timelocked', destination },
+          actor,
+        );
         return { ok: false as const, reason: 'withdraw_address_timelocked' };
       }
       await this.expireStale(tx);
@@ -1151,7 +1487,13 @@ export class PgRiskOfficer implements RiskOfficer {
       const free = s.cash - this.presetOf(s).limits.feeReserveLamports - book.heldLamports;
       if (amount > free) {
         await this.saveState(tx, s);
-        this.event(tx, 'withdrawal_refused', null, { lamports: amount, reason: 'insufficient_free_cash', freeCash: free }, actor);
+        this.event(
+          tx,
+          'withdrawal_refused',
+          null,
+          { lamports: amount, reason: 'insufficient_free_cash', freeCash: free },
+          actor,
+        );
         return { ok: false as const, reason: 'insufficient_free_cash' };
       }
       const id = randomUUID();
@@ -1163,7 +1505,13 @@ export class PgRiskOfficer implements RiskOfficer {
         await this.ledger(tx, 'withdraw', -amount, id, `withdrawal to ${destination}`);
         await this.saveState(tx, s);
         this.event(tx, 'withdrawal_booked', id, { lamports: amount, destination }, actor);
-        tx.alerts.push({ kind: 'withdrawal', severity: 'info', mode: this.tradingMode, title: 'Paper withdrawal booked', body: `${amount} lamports to ${destination}.` });
+        tx.alerts.push({
+          kind: 'withdrawal',
+          severity: 'info',
+          mode: this.tradingMode,
+          title: 'Paper withdrawal booked',
+          body: `${amount} lamports to ${destination}.`,
+        });
         return { ok: true as const, withdrawalId: id, lamports: amount, destination, ticket: null };
       }
       const expiresAt = new Date(tx.now.getTime() + this.cfg.withdrawTicketTtlMs);
@@ -1171,15 +1519,46 @@ export class PgRiskOfficer implements RiskOfficer {
       await tx.client.query(
         `INSERT INTO reservations (id, mode, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'held', $7, $8)`,
-        [id, this.tradingMode, `withdraw:${id}`, WITHDRAWAL_SLEEVE, destination, amount.toString(), tx.now, holdExpiresAt],
+        [
+          id,
+          this.tradingMode,
+          `withdraw:${id}`,
+          WITHDRAWAL_SLEEVE,
+          destination,
+          amount.toString(),
+          tx.now,
+          holdExpiresAt,
+        ],
       );
       await this.saveState(tx, s);
-      const ticket = signTicket({
-        v: 1, reservationId: id, intent: 'withdraw', mint: null, maxLamports: amount.toString(), maxTipLamports: '0',
-        destination, issuedAt: tx.now.getTime(), expiresAt: expiresAt.getTime(),
-      }, this.ticketSecret!);
-      this.event(tx, 'withdrawal_authorized', id, { lamports: amount, destination, expiresAt: expiresAt.toISOString() }, actor);
-      tx.alerts.push({ kind: 'withdrawal', severity: 'warning', mode: this.tradingMode, title: 'Withdrawal authorized', body: `${amount} lamports to ${destination}.` });
+      const ticket = signTicket(
+        {
+          v: 1,
+          reservationId: id,
+          intent: 'withdraw',
+          mint: null,
+          maxLamports: amount.toString(),
+          maxTipLamports: '0',
+          destination,
+          issuedAt: tx.now.getTime(),
+          expiresAt: expiresAt.getTime(),
+        },
+        this.ticketSecret!,
+      );
+      this.event(
+        tx,
+        'withdrawal_authorized',
+        id,
+        { lamports: amount, destination, expiresAt: expiresAt.toISOString() },
+        actor,
+      );
+      tx.alerts.push({
+        kind: 'withdrawal',
+        severity: 'warning',
+        mode: this.tradingMode,
+        title: 'Withdrawal authorized',
+        body: `${amount} lamports to ${destination}.`,
+      });
       return { ok: true as const, withdrawalId: id, lamports: amount, destination, ticket };
     });
   }
@@ -1189,29 +1568,38 @@ export class PgRiskOfficer implements RiskOfficer {
    * immediately at least one timelock period ago. Unknown provenance fails closed.
    */
   private async addressPassedTimelock(tx: Tx, address: string): Promise<boolean> {
-    const r = (await tx.client.query<{ type: string; at: Date }>(
-      `SELECT type, at FROM audit_events
+    const r = (
+      await tx.client.query<{ type: string; at: Date }>(
+        `SELECT type, at FROM audit_events
         WHERE ref = $1
           AND (type = 'withdraw_address_activated' OR (type = 'withdraw_address_change_requested' AND payload->>'status' = 'active'))
         ORDER BY seq DESC LIMIT 1`,
-      [withdrawAddressRef(address)],
-    )).rows[0];
+        [withdrawAddressRef(address)],
+      )
+    ).rows[0];
     if (!r) return false;
     if (r.type === 'withdraw_address_activated') return true;
     return tx.now.getTime() - r.at.getTime() >= this.cfg.withdrawTimelockMs;
   }
 
   /** Live mode: books a confirmed withdrawal transfer against its hold. */
-  async recordWithdrawal(withdrawalId: string, lamportsSent: bigint, feeLamports: bigint, signature: string | null): Promise<void> {
+  async recordWithdrawal(
+    withdrawalId: string,
+    lamportsSent: bigint,
+    feeLamports: bigint,
+    signature: string | null,
+  ): Promise<void> {
     if (typeof withdrawalId !== 'string' || !UUID.test(withdrawalId)) throw new RiskError('invalid withdrawalId');
     const sent = assertLamports(lamportsSent, 'lamportsSent');
     const fee = assertLamports(feeLamports, 'feeLamports', true);
     await this.run(async (tx) => {
       const s = await this.lockState(tx);
-      const r = (await tx.client.query<ReservationRow>(
-        'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
-        [withdrawalId, this.tradingMode],
-      )).rows[0];
+      const r = (
+        await tx.client.query<ReservationRow>(
+          'SELECT id, idempotency_key, sleeve, mint, lamports, status, created_at, expires_at FROM reservations WHERE id = $1 AND mode = $2 FOR UPDATE',
+          [withdrawalId, this.tradingMode],
+        )
+      ).rows[0];
       if (!r || r.sleeve !== WITHDRAWAL_SLEEVE) throw new RiskError('unknown withdrawal');
       if (r.status === 'filled') return;
       if (sent > toBig(r.lamports)) throw new RiskError('withdrawal exceeds the authorized amount');
@@ -1245,7 +1633,7 @@ export class PgRiskOfficer implements RiskOfficer {
     if (live && !fetchChainLamports) throw new RiskError('live reconciliation needs a chain balance fetcher');
 
     let chain: bigint | null = null;
-    let tokenReport: Array<{ mint: string; booked: string; chain: string | null }> | null = null;
+    let tokenReport: { mint: string; booked: string; chain: string | null }[] | null = null;
     let snapshotBefore: string | null = null;
     if (live) {
       snapshotBefore = await this.ledgerSnapshot(this.pool);
@@ -1269,7 +1657,11 @@ export class PgRiskOfficer implements RiskOfficer {
       for (const p of pos) byMint.set(p.mint, (byMint.get(p.mint) ?? 0n) + p.tokenAmount);
       try {
         const onChain = await opts.fetchTokenBalances([...byMint.keys()]);
-        tokenReport = [...byMint.entries()].map(([mint, booked]) => ({ mint, booked: booked.toString(), chain: onChain.get(mint)?.toString() ?? null }));
+        tokenReport = [...byMint.entries()].map(([mint, booked]) => ({
+          mint,
+          booked: booked.toString(),
+          chain: onChain.get(mint)?.toString() ?? null,
+        }));
       } catch {
         tokenReport = null;
       }
@@ -1280,12 +1672,19 @@ export class PgRiskOfficer implements RiskOfficer {
       if (live && (await this.ledgerSnapshot(tx.client)) !== snapshotBefore) {
         return { status: 'deferred' as const, reason: 'ledger changed during the chain fetch' };
       }
-      const sumRes = await tx.client.query<{ total: string }>('SELECT coalesce(sum(lamports), 0)::text AS total FROM ledger_entries WHERE mode = $1', [this.tradingMode]);
+      const sumRes = await tx.client.query<{ total: string }>(
+        'SELECT coalesce(sum(lamports), 0)::text AS total FROM ledger_entries WHERE mode = $1',
+        [this.tradingMode],
+      );
       const ledgerSum = toBig(sumRes.rows[0]!.total);
       const book = await loadBookTotals(tx.client, this.tradingMode);
       const detail: Record<string, unknown> = {
-        ledgerSum: ledgerSum.toString(), cash: s.cash.toString(), held: book.heldLamports.toString(),
-        openPositions: book.openCount, closingPositions: book.closingCount, costBasis: book.costBasisLamports.toString(),
+        ledgerSum: ledgerSum.toString(),
+        cash: s.cash.toString(),
+        held: book.heldLamports.toString(),
+        openPositions: book.openCount,
+        closingPositions: book.closingCount,
+        costBasis: book.costBasisLamports.toString(),
         tokens: tokenReport,
       };
       const problems: string[] = [];
@@ -1301,7 +1700,12 @@ export class PgRiskOfficer implements RiskOfficer {
           const inflightSell = diff > 0n && book.closingCount > 0;
           if ((inflightBuy || inflightSell) && this.reconcileDeferrals < this.cfg.reconcileMaxDeferrals) {
             this.reconcileDeferrals++;
-            return { status: 'deferred' as const, reason: inflightBuy ? 'pending buy may explain the difference' : 'pending sell may explain the difference' };
+            return {
+              status: 'deferred' as const,
+              reason: inflightBuy
+                ? 'pending buy may explain the difference'
+                : 'pending sell may explain the difference',
+            };
           }
           problems.push(`chain ${chain} != booked cash ${s.cash} (diff ${diff})`);
         }
@@ -1311,13 +1715,27 @@ export class PgRiskOfficer implements RiskOfficer {
       detail.problems = problems;
       await tx.client.query(
         'INSERT INTO reconciliation_runs (mode, at, ledger_lamports, chain_lamports, diff_lamports, ok, detail) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
-        [this.tradingMode, tx.now, s.cash.toString(), chain === null ? null : chain.toString(), diff.toString(), ok, JSON.stringify(detail)],
+        [
+          this.tradingMode,
+          tx.now,
+          s.cash.toString(),
+          chain === null ? null : chain.toString(),
+          diff.toString(),
+          ok,
+          JSON.stringify(detail),
+        ],
       );
       if (!ok) {
         this.applyHalt(tx, s, 'reconciliation_mismatch', problems.join('; '));
         await this.saveState(tx, s);
         this.event(tx, 'reconciliation_failed', null, detail);
-        return { status: 'mismatch' as const, ledgerLamports: s.cash, chainLamports: chain, diffLamports: diff, detail: problems.join('; ') };
+        return {
+          status: 'mismatch' as const,
+          ledgerLamports: s.cash,
+          chainLamports: chain,
+          diffLamports: diff,
+          detail: problems.join('; '),
+        };
       }
       return { status: 'ok' as const, ledgerLamports: s.cash, chainLamports: chain, diffLamports: diff };
     });
@@ -1339,22 +1757,40 @@ export class PgRiskOfficer implements RiskOfficer {
   async dailySummary(date?: string): Promise<DailySummary> {
     const day = date ?? utcDate(this.clock.now());
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new RiskError('invalid date');
-    const st = (await this.pool.query<{ engine_state: string; halt_reason: string | null; cash_lamports: string; sod_equity_lamports: string; sod_date: string | null }>(
-      `SELECT engine_state, halt_reason, cash_lamports, sod_equity_lamports, to_char(sod_date, 'YYYY-MM-DD') AS sod_date FROM pool_state WHERE mode = $1`,
-      [this.tradingMode],
-    )).rows[0]!;
+    const st = (
+      await this.pool.query<{
+        engine_state: string;
+        halt_reason: string | null;
+        cash_lamports: string;
+        sod_equity_lamports: string;
+        sod_date: string | null;
+      }>(
+        `SELECT engine_state, halt_reason, cash_lamports, sod_equity_lamports, to_char(sod_date, 'YYYY-MM-DD') AS sod_date FROM pool_state WHERE mode = $1`,
+        [this.tradingMode],
+      )
+    ).rows[0]!;
     const book = await loadBookTotals(this.pool, this.tradingMode);
     const equity = toBig(st.cash_lamports) + book.inPositionsLamports;
-    const trades = (await this.pool.query<{ n: string; wins: string; realized: string }>(
-      `SELECT count(*)::text AS n, count(*) FILTER (WHERE realized_pnl_lamports > 0)::text AS wins, coalesce(sum(realized_pnl_lamports), 0)::text AS realized
+    const trades = (
+      await this.pool.query<{ n: string; wins: string; realized: string }>(
+        `SELECT count(*)::text AS n, count(*) FILTER (WHERE realized_pnl_lamports > 0)::text AS wins, coalesce(sum(realized_pnl_lamports), 0)::text AS realized
          FROM positions WHERE mode = $1 AND status = 'closed' AND closed_at >= (($2::date)::timestamp AT TIME ZONE 'UTC') AND closed_at < ((($2::date) + 1)::timestamp AT TIME ZONE 'UTC')`,
-      [this.tradingMode, day],
-    )).rows[0]!;
+        [this.tradingMode, day],
+      )
+    ).rows[0]!;
     const sod = st.sod_date === day ? toBig(st.sod_equity_lamports) : equity;
     const summary: DailySummary = {
-      mode: this.tradingMode, date: day, equityLamports: equity, startOfDayEquityLamports: sod, netPnlLamports: equity - sod,
-      realizedPnlLamports: toBig(trades.realized), trades: Number(trades.n), wins: Number(trades.wins), solUsd: this.solUsd(),
-      engineState: st.engine_state, haltReason: st.halt_reason,
+      mode: this.tradingMode,
+      date: day,
+      equityLamports: equity,
+      startOfDayEquityLamports: sod,
+      netPnlLamports: equity - sod,
+      realizedPnlLamports: toBig(trades.realized),
+      trades: Number(trades.n),
+      wins: Number(trades.wins),
+      solUsd: this.solUsd(),
+      engineState: st.engine_state,
+      haltReason: st.halt_reason,
     };
     this.alerter.dailySummary(summary).catch(() => undefined);
     return summary;

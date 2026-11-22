@@ -36,10 +36,16 @@ describe('demo mode safety', () => {
     expect(demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'development' })).toBeNull();
   });
   it('is refused in production on a non-loopback origin or with real credentials', () => {
-    expect(demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production', DASHBOARD_ORIGIN: 'https://dash.example.test' })).not.toBeNull();
-    expect(demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production', ENGINE_API_TOKEN: 'a'.repeat(64) })).not.toBeNull();
+    expect(
+      demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production', DASHBOARD_ORIGIN: 'https://dash.example.test' }),
+    ).not.toBeNull();
+    expect(
+      demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production', ENGINE_API_TOKEN: 'a'.repeat(64) }),
+    ).not.toBeNull();
     expect(demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production', DATABASE_URL: 'postgres://x' })).not.toBeNull();
-    expect(() => loadConfig({ DEMO_MODE: 'true', NODE_ENV: 'production', DATABASE_URL: 'postgres://x' })).toThrow(ConfigError);
+    expect(() => loadConfig({ DEMO_MODE: 'true', NODE_ENV: 'production', DATABASE_URL: 'postgres://x' })).toThrow(
+      ConfigError,
+    );
   });
   it('allows a local production-build preview with nothing configured', () => {
     expect(demoModeRefusal({ DEMO_MODE: 'true', NODE_ENV: 'production' })).toBeNull();

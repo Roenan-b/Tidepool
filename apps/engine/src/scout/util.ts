@@ -24,7 +24,12 @@ export class TokenBucket {
   }
 
   /** Builds a bucket for a documented requests-per-minute limit with a small burst allowance. */
-  static perMinute(rpm: number, burst = Math.max(1, Math.floor(rpm / 10)), now?: () => number, sleep?: SleepFn): TokenBucket {
+  static perMinute(
+    rpm: number,
+    burst = Math.max(1, Math.floor(rpm / 10)),
+    now?: () => number,
+    sleep?: SleepFn,
+  ): TokenBucket {
     return new TokenBucket(burst, rpm / 60, now, sleep);
   }
 
@@ -68,12 +73,12 @@ export class TokenBucket {
  * `tryConsume(n)` succeeds only if `n` units fit in the last `windowMs`.
  */
 export class WindowBudget {
-  private readonly entries: Array<{ at: number; n: number }> = [];
+  private readonly entries: { at: number; n: number }[] = [];
   private used = 0;
 
   constructor(
     readonly limit: number,
-    private readonly windowMs: number = 3_600_000,
+    private readonly windowMs = 3_600_000,
     private readonly now: () => number = Date.now,
   ) {
     if (!(limit >= 0) || !Number.isFinite(limit)) throw new RangeError('invalid budget limit');
@@ -113,7 +118,10 @@ export class WindowBudget {
 export class LruMap<K, V> {
   private readonly map = new Map<K, V>();
 
-  constructor(readonly maxSize: number, private readonly onEvict?: (key: K, value: V) => void) {
+  constructor(
+    readonly maxSize: number,
+    private readonly onEvict?: (key: K, value: V) => void,
+  ) {
     if (!(maxSize >= 1)) throw new RangeError('maxSize must be >= 1');
   }
 
@@ -164,7 +172,12 @@ export class LruMap<K, V> {
 }
 
 /** Full-jitter exponential backoff delay for attempt `n` (0-based). */
-export function backoffDelay(attempt: number, baseMs: number, maxMs: number, random: () => number = Math.random): number {
+export function backoffDelay(
+  attempt: number,
+  baseMs: number,
+  maxMs: number,
+  random: () => number = Math.random,
+): number {
   const cap = Math.min(maxMs, baseMs * 2 ** Math.min(attempt, 20));
   return Math.floor(random() * cap);
 }
@@ -183,8 +196,8 @@ export function redactUrl(raw: string): string {
 }
 
 // Control characters (C0 and C1) and Unicode bidi/zero-width format characters.
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁩﻿]/g;
+// eslint-disable-next-line no-control-regex -- strips control characters on purpose
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
 
 // A UTF-16 surrogate without its partner. Postgres rejects these inside jsonb.
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
@@ -205,6 +218,7 @@ export function sanitizeText(input: unknown, maxLen: number): string {
 
 /** Makes a string storable in a Postgres text or jsonb value: drops NUL, replaces unpaired surrogates. */
 export function pgSafeString(s: string): string {
+  // eslint-disable-next-line no-control-regex -- Postgres text cannot store NUL
   return s.replace(/\u0000/g, '').replace(LONE_SURROGATE, '\uFFFD');
 }
 

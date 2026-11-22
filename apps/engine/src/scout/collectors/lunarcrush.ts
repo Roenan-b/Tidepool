@@ -73,7 +73,9 @@ export class LunarCrushCollector implements Collector {
       if (this.inflight) return;
       this.inflight = this.pollOnce()
         .then(() => undefined)
-        .catch((e) => this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'lunarcrush poll failed'))
+        .catch((e: unknown) =>
+          this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'lunarcrush poll failed'),
+        )
         .finally(() => {
           this.inflight = null;
         });
@@ -104,11 +106,14 @@ export class LunarCrushCollector implements Collector {
       return false;
     }
     this.lastPolled.set(next.mint, now);
-    if (this.lastPolled.size > 5_000) this.lastPolled.delete(this.lastPolled.keys().next().value as string);
+    if (this.lastPolled.size > 5_000) this.lastPolled.delete(this.lastPolled.keys().next().value!);
     const base = (this.opts.baseUrl ?? 'https://lunarcrush.com').replace(/\/+$/, '');
     const url = `${base}/api4/public/coins/${encodeURIComponent(next.symbol.toLowerCase())}/v1`;
     // One budget unit pays for exactly one request, so the budgeted call is never retried.
-    const body = await this.http.json(url, coinSchema, { headers: { authorization: `Bearer ${this.opts.apiKey}` }, maxRetries: 0 });
+    const body = await this.http.json(url, coinSchema, {
+      headers: { authorization: `Bearer ${String(this.opts.apiKey)}` },
+      maxRetries: 0,
+    });
     const d = body.data;
     if (d.symbol && d.symbol.toUpperCase() !== next.symbol.toUpperCase()) {
       this.opts.metrics?.inc('lunarcrush.symbol_mismatch');

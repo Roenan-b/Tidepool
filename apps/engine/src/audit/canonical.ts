@@ -14,6 +14,7 @@ export function normalizeJson(value: unknown): unknown {
 }
 
 /** NUL and unpaired UTF-16 surrogates: Postgres jsonb rejects both, which would abort the caller's transaction. */
+// eslint-disable-next-line no-control-regex -- Postgres jsonb cannot store NUL, so it is removed on purpose
 const UNSTORABLE = /\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 
 /** Replaces characters Postgres cannot store with U+FFFD. Idempotent, so verify-time hashing matches. */
@@ -35,7 +36,9 @@ export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+  const keys = Object.keys(obj)
+    .filter((k) => obj[k] !== undefined)
+    .sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 

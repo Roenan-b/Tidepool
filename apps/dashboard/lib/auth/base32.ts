@@ -1,7 +1,7 @@
 /** RFC 4648 base32 (upper-case alphabet), used for TOTP shared secrets. */
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-const LOOKUP: Record<string, number> = Object.fromEntries([...ALPHABET].map((c, i) => [c, i]));
+const LOOKUP: Record<string, number> = Object.fromEntries(Array.from(ALPHABET).map((c, i) => [c, i]));
 
 /** Encodes bytes as base32. Padding is omitted by default, as authenticator apps expect. */
 export function base32Encode(data: Uint8Array, padding = false): string {
@@ -12,12 +12,12 @@ export function base32Encode(data: Uint8Array, padding = false): string {
     buffer = (buffer << 8) | byte;
     bits += 8;
     while (bits >= 5) {
-      out += ALPHABET[(buffer >>> (bits - 5)) & 31];
+      out += ALPHABET[(buffer >>> (bits - 5)) & 31]!;
       bits -= 5;
     }
     buffer &= (1 << bits) - 1;
   }
-  if (bits > 0) out += ALPHABET[(buffer << (5 - bits)) & 31];
+  if (bits > 0) out += ALPHABET[(buffer << (5 - bits)) & 31]!;
   if (padding) while (out.length % 8 !== 0) out += '=';
   return out;
 }

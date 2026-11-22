@@ -26,10 +26,17 @@ export class PgOrderRepository implements OrderRepository {
   }
 
   async markSubmitted(id: string, at: Date): Promise<void> {
-    await this.expectOne(`UPDATE orders SET status = 'submitted', submitted_at = $2 WHERE id = $1 AND status = 'built'`, [id, at], id);
+    await this.expectOne(
+      `UPDATE orders SET status = 'submitted', submitted_at = $2 WHERE id = $1 AND status = 'built'`,
+      [id, at],
+      id,
+    );
   }
 
-  async markLanded(id: string, r: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint }): Promise<void> {
+  async markLanded(
+    id: string,
+    r: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint },
+  ): Promise<void> {
     await this.expectOne(
       `UPDATE orders SET status = 'landed', landed_at = $2, signature = $3, lamports = $4, token_amount = COALESCE($5, token_amount), fee_lamports = $6
        WHERE id = $1 AND status IN ('built', 'submitted')`,
@@ -38,7 +45,10 @@ export class PgOrderRepository implements OrderRepository {
     );
   }
 
-  async markFailed(id: string, r: { at: Date; error: string; feeLamports: bigint; signature?: string | null }): Promise<void> {
+  async markFailed(
+    id: string,
+    r: { at: Date; error: string; feeLamports: bigint; signature?: string | null },
+  ): Promise<void> {
     // landed_at is set only when a failed transaction still landed (fee burned on chain).
     await this.expectOne(
       `UPDATE orders SET status = 'failed', error = $2, fee_lamports = $3, signature = COALESCE($4, signature),
@@ -85,7 +95,15 @@ export class InMemoryOrderRepository implements OrderRepository {
       const oldest = this.rows.keys().next().value;
       if (oldest !== undefined) this.rows.delete(oldest);
     }
-    this.rows.set(o.id, { ...o, status: 'built', signature: null, feeLamports: null, submittedAt: null, landedAt: null, error: null });
+    this.rows.set(o.id, {
+      ...o,
+      status: 'built',
+      signature: null,
+      feeLamports: null,
+      submittedAt: null,
+      landedAt: null,
+      error: null,
+    });
   }
 
   async markSubmitted(id: string, at: Date): Promise<void> {
@@ -95,21 +113,42 @@ export class InMemoryOrderRepository implements OrderRepository {
     r.submittedAt = at;
   }
 
-  async markLanded(id: string, x: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint }): Promise<void> {
+  async markLanded(
+    id: string,
+    x: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint },
+  ): Promise<void> {
     const r = this.get(id);
     if (r.status === 'landed' || r.status === 'failed') throw new Error(`order ${id}: already ${r.status}`);
-    Object.assign(r, { status: 'landed', landedAt: x.at, signature: x.signature, lamports: x.lamports, tokenAmount: x.tokenAmount ?? r.tokenAmount, feeLamports: x.feeLamports });
+    Object.assign(r, {
+      status: 'landed',
+      landedAt: x.at,
+      signature: x.signature,
+      lamports: x.lamports,
+      tokenAmount: x.tokenAmount ?? r.tokenAmount,
+      feeLamports: x.feeLamports,
+    });
   }
 
-  async markFailed(id: string, x: { at: Date; error: string; feeLamports: bigint; signature?: string | null }): Promise<void> {
+  async markFailed(
+    id: string,
+    x: { at: Date; error: string; feeLamports: bigint; signature?: string | null },
+  ): Promise<void> {
     const r = this.get(id);
     if (r.status === 'landed' || r.status === 'failed') throw new Error(`order ${id}: already ${r.status}`);
-    Object.assign(r, { status: 'failed', error: x.error.slice(0, 500), feeLamports: x.feeLamports, signature: x.signature ?? r.signature, landedAt: x.signature ? x.at : r.landedAt });
+    Object.assign(r, {
+      status: 'failed',
+      error: x.error.slice(0, 500),
+      feeLamports: x.feeLamports,
+      signature: x.signature ?? r.signature,
+      landedAt: x.signature ? x.at : r.landedAt,
+    });
   }
 
   async attachPosition(id: string, positionId: string): Promise<void> {
     this.get(id).positionId = positionId;
   }
 
-  list(): OrderRow[] { return [...this.rows.values()]; }
+  list(): OrderRow[] {
+    return [...this.rows.values()];
+  }
 }

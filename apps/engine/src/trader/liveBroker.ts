@@ -9,14 +9,34 @@
  */
 import { createPublicKey, verify as edVerify } from 'node:crypto';
 import {
-  AddressLookupTableAccount, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction,
-  type BlockhashWithExpiryBlockHeight, type BlockheightBasedTransactionConfirmationStrategy,
-  type Commitment, type Connection, type GetVersionedTransactionConfig, type RpcResponseAndContext, type SendOptions,
-  type SignatureResult, type TokenBalance, type VersionedTransactionResponse,
+  AddressLookupTableAccount,
+  PublicKey,
+  SystemProgram,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
+  type BlockhashWithExpiryBlockHeight,
+  type BlockheightBasedTransactionConfirmationStrategy,
+  type Commitment,
+  type Connection,
+  type GetVersionedTransactionConfig,
+  type RpcResponseAndContext,
+  type SendOptions,
+  type SignatureResult,
+  type TokenBalance,
+  type VersionedTransactionResponse,
 } from '@solana/web3.js';
 import type { SignedTicket } from '@tidepool/core/ticket';
 import type { Broker } from '../contracts.js';
-import { JupiterQuoteSource, quoteProblem, SOL_MINT, type JupiterClient, type JupiterInstruction, type JupiterQuote, type JupiterSwapInstructions } from './jupiter.js';
+import {
+  JupiterQuoteSource,
+  quoteProblem,
+  SOL_MINT,
+  type JupiterClient,
+  type JupiterInstruction,
+  type JupiterQuote,
+  type JupiterSwapInstructions,
+} from './jupiter.js';
 import type { SignerClient } from './signerClient.js';
 import { errorText } from './types.js';
 
@@ -24,9 +44,15 @@ import { errorText } from './types.js';
 export interface LiveConnection {
   getLatestBlockhash(commitment?: Commitment): Promise<BlockhashWithExpiryBlockHeight>;
   getAddressLookupTable(accountKey: PublicKey): Promise<RpcResponseAndContext<AddressLookupTableAccount | null>>;
-  sendRawTransaction(raw: Buffer | Uint8Array | Array<number>, options?: SendOptions): Promise<string>;
-  confirmTransaction(strategy: BlockheightBasedTransactionConfirmationStrategy, commitment?: Commitment): Promise<RpcResponseAndContext<SignatureResult>>;
-  getTransaction(signature: string, rawConfig: GetVersionedTransactionConfig): Promise<VersionedTransactionResponse | null>;
+  sendRawTransaction(raw: Buffer | Uint8Array | number[], options?: SendOptions): Promise<string>;
+  confirmTransaction(
+    strategy: BlockheightBasedTransactionConfirmationStrategy,
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<SignatureResult>>;
+  getTransaction(
+    signature: string,
+    rawConfig: GetVersionedTransactionConfig,
+  ): Promise<VersionedTransactionResponse | null>;
 }
 // Compile-time check that a real Connection fits.
 export const _connectionFits: (c: Connection) => LiveConnection = (c) => c;
@@ -81,7 +107,10 @@ const DEFAULT_ATA_RENT_ALLOWANCE = 2_100_000n;
 export function policyCheckedAccounts(instructions: readonly TransactionInstruction[]): Set<string> {
   const out = new Set<string>();
   const add = (ix: TransactionInstruction, positions: number[]) => {
-    for (const p of positions) { const k = ix.keys[p]; if (k) out.add(k.pubkey.toBase58()); }
+    for (const p of positions) {
+      const k = ix.keys[p];
+      if (k) out.add(k.pubkey.toBase58());
+    }
   };
   for (const ix of instructions) {
     const program = ix.programId.toBase58();
@@ -100,7 +129,10 @@ export function policyCheckedAccounts(instructions: readonly TransactionInstruct
  * message compiler keeps them as static keys. Indexes of every other address are unchanged, so the compiled
  * message still resolves correctly against the real on-chain table.
  */
-export function maskLookupTable(t: AddressLookupTableAccount, keepStatic: ReadonlySet<string>): AddressLookupTableAccount {
+export function maskLookupTable(
+  t: AddressLookupTableAccount,
+  keepStatic: ReadonlySet<string>,
+): AddressLookupTableAccount {
   if (!t.state.addresses.some((a) => keepStatic.has(a.toBase58()))) return t;
   const addresses = t.state.addresses.map((a) => (keepStatic.has(a.toBase58()) ? PublicKey.unique() : a));
   return new AddressLookupTableAccount({ key: t.key, state: { ...t.state, addresses } });
@@ -139,7 +171,10 @@ export function priorityFeeLamports(instructions: readonly TransactionInstructio
   let price = 0n;
   let others = 0n;
   for (const ix of instructions) {
-    if (ix.programId.toBase58() !== COMPUTE_BUDGET_PROGRAM) { others += 1n; continue; }
+    if (ix.programId.toBase58() !== COMPUTE_BUDGET_PROGRAM) {
+      others += 1n;
+      continue;
+    }
     if (ix.data[0] === 2 && ix.data.length === 5) limit = BigInt(ix.data.readUInt32LE(1));
     else if (ix.data[0] === 3 && ix.data.length === 9) price = ix.data.readBigUInt64LE(1);
   }
@@ -150,7 +185,10 @@ export function priorityFeeLamports(instructions: readonly TransactionInstructio
 
 /** Thrown when a transaction may or may not have landed. Callers must not release funds on this error. */
 export class UnknownOutcomeError extends Error {
-  constructor(message: string, readonly signature: string | null) {
+  constructor(
+    message: string,
+    readonly signature: string | null,
+  ) {
     super(message);
     this.name = 'UnknownOutcomeError';
   }
@@ -164,8 +202,14 @@ export function base58Encode(bytes: Uint8Array): string {
   let n = 0n;
   for (const b of bytes) n = (n << 8n) | BigInt(b);
   let out = '';
-  while (n > 0n) { out = ALPHABET[Number(n % 58n)] + out; n /= 58n; }
-  for (const b of bytes) { if (b !== 0) break; out = `1${out}`; }
+  while (n > 0n) {
+    out = ALPHABET[Number(n % 58n)]! + out;
+    n /= 58n;
+  }
+  for (const b of bytes) {
+    if (b !== 0) break;
+    out = `1${out}`;
+  }
   return out;
 }
 
@@ -179,12 +223,17 @@ function toInstruction(i: JupiterInstruction): TransactionInstruction {
 
 function checkUrl(raw: string, name: string): string {
   let u: URL;
-  try { u = new URL(raw); } catch { throw new Error(`${name} is not a valid URL`); }
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error(`${name} is not a valid URL`);
+  }
   if (u.protocol !== 'https:') throw new Error(`${name} must use https`);
   return raw;
 }
 
-type Sent = { kind: 'sent'; signature: string } | { kind: 'rejected'; error: string } | { kind: 'ambiguous'; error: string };
+type Sent =
+  { kind: 'sent'; signature: string } | { kind: 'rejected'; error: string } | { kind: 'ambiguous'; error: string };
 
 export class LiveBroker implements Broker {
   readonly mode = 'live' as const;
@@ -208,7 +257,9 @@ export class LiveBroker implements Broker {
     this.quotes = new JupiterQuoteSource(opts.jupiter);
     this.fetchFn = opts.fetch ?? fetch;
     this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-    this.swapPrograms = new Set((opts.allowedSwapProgramIds ?? [JUPITER_V6_PROGRAM]).map((k) => new PublicKey(k).toBase58()));
+    this.swapPrograms = new Set(
+      (opts.allowedSwapProgramIds ?? [JUPITER_V6_PROGRAM]).map((k) => new PublicKey(k).toBase58()),
+    );
     const rent = opts.ataRentAllowanceLamports ?? DEFAULT_ATA_RENT_ALLOWANCE;
     if (rent < 0n) throw new RangeError('ataRentAllowanceLamports must be non-negative');
     this.ataRentAllowance = rent;
@@ -228,29 +279,69 @@ export class LiveBroker implements Broker {
     return this.quotes.quote(mint, side, amount);
   }
 
-  async buy(args: { mint: string; lamportsIn: bigint; slippageBps: number; tipLamports: bigint; ticket: SignedTicket | null }): Promise<BuyResult> {
+  async buy(args: {
+    mint: string;
+    lamportsIn: bigint;
+    slippageBps: number;
+    tipLamports: bigint;
+    ticket: SignedTicket | null;
+  }): Promise<BuyResult> {
     if (!args.ticket) return { ok: false, error: 'live buy without ticket', burnedFeeLamports: 0n };
-    const r = await this.swap({ inputMint: SOL_MINT, outputMint: args.mint, amount: args.lamportsIn, slippageBps: args.slippageBps, tipLamports: args.tipLamports, ticket: args.ticket });
+    const r = await this.swap({
+      inputMint: SOL_MINT,
+      outputMint: args.mint,
+      amount: args.lamportsIn,
+      slippageBps: args.slippageBps,
+      tipLamports: args.tipLamports,
+      ticket: args.ticket,
+    });
     if (!r.ok) return r;
     const tokenAmount = r.tokenDelta > 0n ? r.tokenDelta : 0n;
     return { ok: true, lamportsSpent: -r.solDelta, tokenAmount, signature: r.signature };
   }
 
-  async sell(args: { mint: string; tokenAmount: bigint; slippageBps: number; tipLamports: bigint; ticket: SignedTicket | null }): Promise<SellResult> {
+  async sell(args: {
+    mint: string;
+    tokenAmount: bigint;
+    slippageBps: number;
+    tipLamports: bigint;
+    ticket: SignedTicket | null;
+  }): Promise<SellResult> {
     if (!args.ticket) return { ok: false, error: 'live sell without ticket', burnedFeeLamports: 0n };
-    const r = await this.swap({ inputMint: args.mint, outputMint: SOL_MINT, amount: args.tokenAmount, slippageBps: args.slippageBps, tipLamports: args.tipLamports, ticket: args.ticket });
+    const r = await this.swap({
+      inputMint: args.mint,
+      outputMint: SOL_MINT,
+      amount: args.tokenAmount,
+      slippageBps: args.slippageBps,
+      tipLamports: args.tipLamports,
+      ticket: args.ticket,
+    });
     if (!r.ok) return r;
     return { ok: true, lamportsReceived: r.solDelta, signature: r.signature };
   }
 
-  private async swap(a: { inputMint: string; outputMint: string; amount: bigint; slippageBps: number; tipLamports: bigint; ticket: SignedTicket }):
-    Promise<{ ok: true; solDelta: bigint; tokenDelta: bigint; signature: string } | { ok: false; error: string; burnedFeeLamports: bigint }> {
+  private async swap(a: {
+    inputMint: string;
+    outputMint: string;
+    amount: bigint;
+    slippageBps: number;
+    tipLamports: bigint;
+    ticket: SignedTicket;
+  }): Promise<
+    | { ok: true; solDelta: bigint; tokenDelta: bigint; signature: string }
+    | { ok: false; error: string; burnedFeeLamports: bigint }
+  > {
     const tokenMint = a.inputMint === SOL_MINT ? a.outputMint : a.inputMint;
     // 1. Build. Any failure before sending costs nothing.
     let tx: VersionedTransaction;
     let blockhash: BlockhashWithExpiryBlockHeight;
     try {
-      const request = { inputMint: a.inputMint, outputMint: a.outputMint, amount: a.amount, slippageBps: a.slippageBps };
+      const request = {
+        inputMint: a.inputMint,
+        outputMint: a.outputMint,
+        amount: a.amount,
+        slippageBps: a.slippageBps,
+      };
       const quote: JupiterQuote = await this.opts.jupiter.quote(request);
       // Re-checked here because the quote is sent back verbatim and its threshold becomes the swap's minimum out.
       const problem = quoteProblem(quote, request);
@@ -261,7 +352,8 @@ export class LiveBroker implements Broker {
         userPublicKey: this.wallet.toBase58(),
         prioritizationFeeLamports: tipped ? (this.opts.priorityFeeLamportsWithTip ?? 10_000) : Number(a.tipLamports),
       });
-      if (!this.swapPrograms.has(ixs.swapInstruction.programId)) throw new Error(`swap instruction targets unexpected program ${ixs.swapInstruction.programId}`);
+      if (!this.swapPrograms.has(ixs.swapInstruction.programId))
+        throw new Error(`swap instruction targets unexpected program ${ixs.swapInstruction.programId}`);
       ({ tx, blockhash } = await this.buildTransaction(ixs, tipped ? a.tipLamports : 0n, a.ticket));
     } catch (err) {
       return { ok: false, error: `build failed: ${errorText(err, 300)}`, burnedFeeLamports: 0n };
@@ -271,7 +363,10 @@ export class LiveBroker implements Broker {
     let signed: VersionedTransaction;
     let signature: string;
     try {
-      const res = await this.opts.signer.sign({ ticket: a.ticket, transactionBase64: Buffer.from(tx.serialize()).toString('base64') });
+      const res = await this.opts.signer.sign({
+        ticket: a.ticket,
+        transactionBase64: Buffer.from(tx.serialize()).toString('base64'),
+      });
       signed = VersionedTransaction.deserialize(Buffer.from(res.signedTransactionBase64, 'base64'));
       this.verifySigned(tx, signed, res.signature);
       signature = res.signature;
@@ -286,18 +381,32 @@ export class LiveBroker implements Broker {
 
     // 4. Confirm (an ambiguous send still gets confirmed by blockhash expiry).
     const status = await this.confirm(signature, blockhash);
-    if (status === 'expired') return { ok: false, error: sent.kind === 'ambiguous' ? `not landed (send error: ${sent.error})` : 'not landed before blockhash expiry', burnedFeeLamports: 0n };
+    if (status === 'expired')
+      return {
+        ok: false,
+        error:
+          sent.kind === 'ambiguous' ? `not landed (send error: ${sent.error})` : 'not landed before blockhash expiry',
+        burnedFeeLamports: 0n,
+      };
 
     // 5. Read the actual balance changes.
     const meta = await this.fetchMeta(signature);
     if (meta.err !== null) {
       const burned = -meta.solDelta;
-      return { ok: false, error: `transaction failed on chain: ${JSON.stringify(meta.err).slice(0, 200)}`, burnedFeeLamports: burned > 0n ? burned : 0n };
+      return {
+        ok: false,
+        error: `transaction failed on chain: ${JSON.stringify(meta.err).slice(0, 200)}`,
+        burnedFeeLamports: burned > 0n ? burned : 0n,
+      };
     }
     return { ok: true, solDelta: meta.solDelta, tokenDelta: this.tokenDelta(meta.tx, tokenMint), signature };
   }
 
-  private async buildTransaction(ixs: JupiterSwapInstructions, tipLamports: bigint, ticket: SignedTicket): Promise<{ tx: VersionedTransaction; blockhash: BlockhashWithExpiryBlockHeight }> {
+  private async buildTransaction(
+    ixs: JupiterSwapInstructions,
+    tipLamports: bigint,
+    ticket: SignedTicket,
+  ): Promise<{ tx: VersionedTransaction; blockhash: BlockhashWithExpiryBlockHeight }> {
     const list: JupiterInstruction[] = [
       ...ixs.computeBudgetInstructions,
       ...ixs.setupInstructions,
@@ -309,12 +418,15 @@ export class LiveBroker implements Broker {
     // Fail closed if the router asks for any signer other than our wallet.
     for (const i of list) {
       for (const acc of i.accounts) {
-        if (acc.isSigner && acc.pubkey !== this.wallet.toBase58()) throw new Error('route requires an unexpected signer');
+        if (acc.isSigner && acc.pubkey !== this.wallet.toBase58())
+          throw new Error('route requires an unexpected signer');
       }
     }
     const instructions = list.map(toInstruction);
     if (tipLamports > 0n && this.tipAccount) {
-      instructions.push(SystemProgram.transfer({ fromPubkey: this.wallet, toPubkey: this.tipAccount, lamports: tipLamports }));
+      instructions.push(
+        SystemProgram.transfer({ fromPubkey: this.wallet, toPubkey: this.tipAccount, lamports: tipLamports }),
+      );
     }
     // Checks the signer would make, done here so a doomed transaction does not consume the single-use ticket.
     const tipCap = /^\d{1,20}$/.test(ticket.ticket.maxTipLamports) ? BigInt(ticket.ticket.maxTipLamports) : 0n;
@@ -326,13 +438,22 @@ export class LiveBroker implements Broker {
     if (prio > tipCap) throw new Error(`priority fee ${prio} exceeds ticket tip allowance ${tipCap}`);
     // Keep every account the signer policy must verify out of lookup tables (it denies table-resolved ones).
     const keepStatic = policyCheckedAccounts(instructions);
-    const alts = await Promise.all(ixs.addressLookupTableAddresses.map(async (addr) => {
-      const r = await this.rpc(this.opts.connection.getAddressLookupTable(new PublicKey(addr)), 'getAddressLookupTable');
-      if (!r.value) throw new Error(`lookup table ${addr} not found`);
-      return maskLookupTable(r.value, keepStatic);
-    }));
+    const alts = await Promise.all(
+      ixs.addressLookupTableAddresses.map(async (addr) => {
+        const r = await this.rpc(
+          this.opts.connection.getAddressLookupTable(new PublicKey(addr)),
+          'getAddressLookupTable',
+        );
+        if (!r.value) throw new Error(`lookup table ${addr} not found`);
+        return maskLookupTable(r.value, keepStatic);
+      }),
+    );
     const blockhash = await this.rpc(this.opts.connection.getLatestBlockhash('confirmed'), 'getLatestBlockhash');
-    const message = new TransactionMessage({ payerKey: this.wallet, recentBlockhash: blockhash.blockhash, instructions }).compileToV0Message(alts);
+    const message = new TransactionMessage({
+      payerKey: this.wallet,
+      recentBlockhash: blockhash.blockhash,
+      instructions,
+    }).compileToV0Message(alts);
     return { tx: new VersionedTransaction(message), blockhash };
   }
 
@@ -340,9 +461,16 @@ export class LiveBroker implements Broker {
   private rpc<T>(p: Promise<T>, what: string): Promise<T> {
     const ms = this.opts.rpcTimeoutMs ?? 10_000;
     let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_r, rej) => { timer = setTimeout(() => rej(Object.assign(new Error(`${what} timed out after ${ms} ms`), { name: 'RpcTimeoutError' })), ms); });
+    const timeout = new Promise<never>((_r, rej) => {
+      timer = setTimeout(
+        () => rej(Object.assign(new Error(`${what} timed out after ${ms} ms`), { name: 'RpcTimeoutError' })),
+        ms,
+      );
+    });
     p.catch(() => undefined);
-    return Promise.race([p, timeout]).finally(() => { if (timer) clearTimeout(timer); });
+    return Promise.race([p, timeout]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
   }
 
   private verifySigned(unsigned: VersionedTransaction, signed: VersionedTransaction, signature: string): void {
@@ -352,7 +480,10 @@ export class LiveBroker implements Broker {
     const sig = signed.signatures[0];
     if (!sig || sig.length !== 64) throw new Error('signed transaction has no fee-payer signature');
     if (base58Encode(sig) !== signature) throw new Error('signature does not match signed transaction');
-    const key = createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(this.wallet.toBytes()).toString('base64url') }, format: 'jwk' });
+    const key = createPublicKey({
+      key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(this.wallet.toBytes()).toString('base64url') },
+      format: 'jwk',
+    });
     if (!edVerify(null, theirs, key, Buffer.from(sig))) throw new Error('fee-payer signature does not verify');
   }
 
@@ -360,7 +491,14 @@ export class LiveBroker implements Broker {
     const landing = this.opts.landing;
     if (landing.method === 'rpc') {
       try {
-        const sig = await this.rpc(this.opts.connection.sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 2 }), 'sendRawTransaction');
+        const sig = await this.rpc(
+          this.opts.connection.sendRawTransaction(raw, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+            maxRetries: 2,
+          }),
+          'sendRawTransaction',
+        );
         if (sig !== signature) return { kind: 'ambiguous', error: 'rpc returned a different signature' };
         return { kind: 'sent', signature };
       } catch (err) {
@@ -376,14 +514,21 @@ export class LiveBroker implements Broker {
       const res = await this.fetchFn(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction', params: [Buffer.from(raw).toString('base64'), { encoding: 'base64', skipPreflight: true, maxRetries: 0 }] }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'sendTransaction',
+          params: [Buffer.from(raw).toString('base64'), { encoding: 'base64', skipPreflight: true, maxRetries: 0 }],
+        }),
         signal: AbortSignal.timeout(this.opts.httpTimeoutMs ?? 5_000),
         redirect: 'error',
       });
       const body = (await res.json().catch(() => null)) as { result?: unknown; error?: { message?: unknown } } | null;
-      if (body && body.error) return { kind: 'rejected', error: String(body.error.message ?? 'rejected').slice(0, 200) };
+      // eslint-disable-next-line @typescript-eslint/no-base-to-string -- error field from an untrusted response body
+      if (body?.error) return { kind: 'rejected', error: String(body.error.message ?? 'rejected').slice(0, 200) };
       if (!res.ok) return { kind: res.status >= 500 ? 'ambiguous' : 'rejected', error: `HTTP ${res.status}` };
-      if (typeof body?.result !== 'string' || body.result !== signature) return { kind: 'ambiguous', error: 'unexpected send result' };
+      if (typeof body?.result !== 'string' || body.result !== signature)
+        return { kind: 'ambiguous', error: 'unexpected send result' };
       return { kind: 'sent', signature };
     } catch (err) {
       return { kind: 'ambiguous', error: errorText(err, 200) };
@@ -394,11 +539,18 @@ export class LiveBroker implements Broker {
   private async confirm(signature: string, bh: BlockhashWithExpiryBlockHeight): Promise<'landed' | 'expired'> {
     const timeoutMs = this.opts.confirmTimeoutMs ?? 90_000;
     let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<'timeout'>((r) => { timer = setTimeout(() => r('timeout'), timeoutMs); });
-    const confirmation = this.opts.connection.confirmTransaction({ signature, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight }, 'confirmed')
+    const timeout = new Promise<'timeout'>((r) => {
+      timer = setTimeout(() => r('timeout'), timeoutMs);
+    });
+    const confirmation = this.opts.connection
+      .confirmTransaction(
+        { signature, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight },
+        'confirmed',
+      )
       .then(() => 'landed' as const)
       .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'TransactionExpiredBlockheightExceededError') return 'expired' as const;
+        if (err instanceof Error && err.name === 'TransactionExpiredBlockheightExceededError')
+          return 'expired' as const;
         throw new UnknownOutcomeError(`confirmation error: ${errorText(err, 200)}`, signature);
       });
     // If the timeout wins the race, a later rejection must not surface as an unhandled rejection (which
@@ -413,19 +565,31 @@ export class LiveBroker implements Broker {
     }
   }
 
-  private async fetchMeta(signature: string): Promise<{ tx: VersionedTransactionResponse; err: unknown; solDelta: bigint }> {
+  private async fetchMeta(
+    signature: string,
+  ): Promise<{ tx: VersionedTransactionResponse; err: unknown; solDelta: bigint }> {
     const retries = this.opts.getTransactionRetries ?? 5;
     for (let i = 0; i <= retries; i++) {
       let tx: VersionedTransactionResponse | null = null;
       try {
-        tx = await this.rpc(this.opts.connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }), 'getTransaction');
-      } catch { /* retry */ }
+        tx = await this.rpc(
+          this.opts.connection.getTransaction(signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          }),
+          'getTransaction',
+        );
+      } catch {
+        /* retry */
+      }
       if (tx?.meta) {
         const payer = tx.transaction.message.staticAccountKeys[0];
-        if (!payer || !payer.equals(this.wallet)) throw new UnknownOutcomeError('confirmed transaction fee payer is not the wallet', signature);
+        if (!payer?.equals(this.wallet))
+          throw new UnknownOutcomeError('confirmed transaction fee payer is not the wallet', signature);
         const pre = tx.meta.preBalances[0];
         const post = tx.meta.postBalances[0];
-        if (pre === undefined || post === undefined) throw new UnknownOutcomeError('transaction meta has no balances', signature);
+        if (pre === undefined || post === undefined)
+          throw new UnknownOutcomeError('transaction meta has no balances', signature);
         return { tx, err: tx.meta.err ?? null, solDelta: BigInt(post) - BigInt(pre) };
       }
       if (i < retries) await this.sleep(this.opts.getTransactionDelayMs ?? 500);
@@ -438,7 +602,8 @@ export class LiveBroker implements Broker {
     const sum = (list: TokenBalance[] | null | undefined) => {
       let total = 0n;
       for (const b of list ?? []) {
-        if (b.mint === mint && b.owner === owner && /^\d+$/.test(b.uiTokenAmount.amount)) total += BigInt(b.uiTokenAmount.amount);
+        if (b.mint === mint && b.owner === owner && /^\d+$/.test(b.uiTokenAmount.amount))
+          total += BigInt(b.uiTokenAmount.amount);
       }
       return total;
     };

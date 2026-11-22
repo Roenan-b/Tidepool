@@ -10,11 +10,15 @@ export interface ReadJsonlOptions {
   maxLines?: number;
 }
 
-export async function readJsonl<S extends z.ZodTypeAny>(path: string, schema: S, opts: ReadJsonlOptions = {}): Promise<Array<z.infer<S>>> {
+export async function readJsonl<S extends z.ZodTypeAny>(
+  path: string,
+  schema: S,
+  opts: ReadJsonlOptions = {},
+): Promise<z.infer<S>[]> {
   const maxLineBytes = opts.maxLineBytes ?? 1_000_000;
   const maxLines = opts.maxLines ?? 5_000_000;
   const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity });
-  const out: Array<z.infer<S>> = [];
+  const out: z.infer<S>[] = [];
   let n = 0;
   for await (const line of rl) {
     n += 1;
@@ -23,13 +27,17 @@ export async function readJsonl<S extends z.ZodTypeAny>(path: string, schema: S,
     const trimmed = line.trim();
     if (!trimmed) continue;
     let raw: unknown;
-    try { raw = JSON.parse(trimmed); } catch { throw new Error(`${path}:${n}: invalid JSON`); }
+    try {
+      raw = JSON.parse(trimmed);
+    } catch {
+      throw new Error(`${path}:${n}: invalid JSON`);
+    }
     const parsed = schema.safeParse(raw);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       throw new Error(`${path}:${n}: ${issue ? `${issue.path.join('.')} ${issue.message}` : 'invalid record'}`);
     }
-    out.push(parsed.data);
+    out.push(parsed.data as z.infer<S>);
   }
   return out;
 }

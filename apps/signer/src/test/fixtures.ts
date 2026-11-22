@@ -40,7 +40,14 @@ export function policyConfig(overrides: Partial<PolicyConfig> = {}): PolicyConfi
 }
 
 export function buyTicket(overrides: Partial<TicketForPolicy> = {}): TicketForPolicy {
-  return { intent: 'buy', maxLamports: '150000000', maxTipLamports: '2000000', destination: null, mint: MEME_MINT.toBase58(), ...overrides };
+  return {
+    intent: 'buy',
+    maxLamports: '150000000',
+    maxTipLamports: '2000000',
+    destination: null,
+    mint: MEME_MINT.toBase58(),
+    ...overrides,
+  };
 }
 
 export function wsolAta(wallet: PublicKey): PublicKey {
@@ -73,7 +80,10 @@ export function createAtaIdempotent(payer: PublicKey, owner: PublicKey, mint: Pu
   });
 }
 
-export function tokenIx(data: number[], keys: { pubkey: PublicKey; isSigner?: boolean; isWritable?: boolean }[]): TransactionInstruction {
+export function tokenIx(
+  data: number[],
+  keys: { pubkey: PublicKey; isSigner?: boolean; isWritable?: boolean }[],
+): TransactionInstruction {
   return new TransactionInstruction({
     programId: TOKEN_PROGRAM_ID,
     keys: keys.map((k) => ({ pubkey: k.pubkey, isSigner: k.isSigner ?? false, isWritable: k.isWritable ?? true })),
@@ -86,7 +96,10 @@ export function syncNative(account: PublicKey): TransactionInstruction {
 }
 
 export function closeAccount(account: PublicKey, destination: PublicKey, owner: PublicKey): TransactionInstruction {
-  return tokenIx([9], [{ pubkey: account }, { pubkey: destination }, { pubkey: owner, isSigner: true, isWritable: false }]);
+  return tokenIx(
+    [9],
+    [{ pubkey: account }, { pubkey: destination }, { pubkey: owner, isSigner: true, isWritable: false }],
+  );
 }
 
 /** Opaque route instruction shaped like a Jupiter swap: wallet as signer plus several pool accounts. */
@@ -107,7 +120,10 @@ export function jupiterRoute(wallet: PublicKey, mint: PublicKey): TransactionIns
 }
 
 /** A realistic buy: budget, create WSOL ATA, wrap, sync, route, create output ATA, unwrap, tip. */
-export function buyInstructions(wallet: PublicKey, opts: { wrapLamports?: bigint; tipLamports?: bigint; microLamports?: number } = {}): TransactionInstruction[] {
+export function buyInstructions(
+  wallet: PublicKey,
+  opts: { wrapLamports?: bigint; tipLamports?: bigint; microLamports?: number } = {},
+): TransactionInstruction[] {
   const ata = wsolAta(wallet);
   return [
     ...computeBudget(200_000, opts.microLamports ?? 1_000),
@@ -121,8 +137,16 @@ export function buyInstructions(wallet: PublicKey, opts: { wrapLamports?: bigint
   ];
 }
 
-export function v0(payer: PublicKey, instructions: TransactionInstruction[], tables: AddressLookupTableAccount[] = []): VersionedTransaction {
-  const message = new TransactionMessage({ payerKey: payer, recentBlockhash: FAKE_BLOCKHASH, instructions }).compileToV0Message(tables);
+export function v0(
+  payer: PublicKey,
+  instructions: TransactionInstruction[],
+  tables: AddressLookupTableAccount[] = [],
+): VersionedTransaction {
+  const message = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: FAKE_BLOCKHASH,
+    instructions,
+  }).compileToV0Message(tables);
   return new VersionedTransaction(message);
 }
 

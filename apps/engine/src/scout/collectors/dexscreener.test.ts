@@ -4,7 +4,16 @@ import { HttpClient } from '../http.js';
 import { ScoutMetrics } from '../metrics.js';
 import { MemorySignalSink } from '../sink.js';
 import { TokenBucket } from '../util.js';
-import { boostSchema, boostToSignal, DexScreenerCollector, pairSchema, pairsToSnapshot, parseRecords, profileSchema, profileToSignal } from './dexscreener.js';
+import {
+  boostSchema,
+  boostToSignal,
+  DexScreenerCollector,
+  pairSchema,
+  pairsToSnapshot,
+  parseRecords,
+  profileSchema,
+  profileToSignal,
+} from './dexscreener.js';
 
 const key = (n: number) => new PublicKey(Buffer.alloc(32, n)).toBase58();
 const MINT = key(7);
@@ -28,7 +37,10 @@ function pair(overrides: Record<string, unknown> = {}) {
     fdv: 250_000,
     marketCap: 250_000,
     pairCreatedAt: NOW.getTime() - 3_600_000,
-    info: { socials: [{ type: 'twitter', url: 'https://x.com/dog' }], websites: [{ url: 'https://dog.example' }, { url: 'javascript:alert(1)' }] },
+    info: {
+      socials: [{ type: 'twitter', url: 'https://x.com/dog' }],
+      websites: [{ url: 'https://dog.example' }, { url: 'javascript:alert(1)' }],
+    },
     someNewField: { tolerated: true },
     ...overrides,
   };
@@ -74,7 +86,11 @@ describe('DEX Screener parsing', () => {
 
   it('ignores pairs quoted in untrusted tokens or with a malformed pair address', () => {
     // A pair against an attacker-priced quote token can report any liquidity; it must not win.
-    const fakeQuote = pair({ pairAddress: key(10), quoteToken: { address: key(11), symbol: 'FAKE' }, liquidity: { usd: 50_000_000 } });
+    const fakeQuote = pair({
+      pairAddress: key(10),
+      quoteToken: { address: key(11), symbol: 'FAKE' },
+      liquidity: { usd: 50_000_000 },
+    });
     const noQuote = pair({ pairAddress: key(12), quoteToken: null, liquidity: { usd: 40_000_000 } });
     const badAddr = pair({ pairAddress: 'p\u0000', liquidity: { usd: 30_000_000 } });
     const { records } = parseRecords([fakeQuote, noQuote, badAddr, pair()], pairSchema);
@@ -87,14 +103,25 @@ describe('DEX Screener parsing', () => {
   it('marks boosted pairs and boost events as boosted', () => {
     const { records } = parseRecords([pair({ boosts: { active: 3 } })], pairSchema);
     expect(pairsToSnapshot(MINT, records, NOW)!.payload.boosted).toBe(true);
-    const b = parseRecords([{ chainId: 'solana', tokenAddress: MINT, amount: 10, totalAmount: 50, description: 'buy now' }], boostSchema);
+    const b = parseRecords(
+      [{ chainId: 'solana', tokenAddress: MINT, amount: 10, totalAmount: 50, description: 'buy now' }],
+      boostSchema,
+    );
     const ev = boostToSignal(b.records[0]!, NOW)!;
     expect(ev.kind).toBe('boost');
     expect(ev.payload.boosted).toBe(true);
   });
 
   it('accepts a single-object profile body and rejects non-Solana or invalid mints', () => {
-    const one = parseRecords({ chainId: 'solana', tokenAddress: MINT, description: 'hi\u0000there', links: [{ type: 'twitter', url: 'https://x.com/a' }] }, profileSchema);
+    const one = parseRecords(
+      {
+        chainId: 'solana',
+        tokenAddress: MINT,
+        description: 'hi\u0000there',
+        links: [{ type: 'twitter', url: 'https://x.com/a' }],
+      },
+      profileSchema,
+    );
     expect(one.records).toHaveLength(1);
     expect(profileToSignal(one.records[0]!, NOW)!.payload.description).toBe('hi there');
     expect(profileToSignal({ chainId: 'base', tokenAddress: MINT }, NOW)).toBeNull();
@@ -109,7 +136,9 @@ describe('DexScreenerCollector', () => {
     const fetch = async (url: string) => {
       urls.push(url);
       const addrs = url.split('/tokens/')[1]!.split(',');
-      const pairs = addrs.slice(0, 2).map((a, i) => pair({ baseToken: { address: a, symbol: 'T' }, pairAddress: key(200 + i) }));
+      const pairs = addrs
+        .slice(0, 2)
+        .map((a, i) => pair({ baseToken: { address: a, symbol: 'T' }, pairAddress: key(200 + i) }));
       return new Response(JSON.stringify({ schemaVersion: '1.0.0', pairs }), { status: 200 });
     };
     const sink = new MemorySignalSink();
@@ -119,7 +148,12 @@ describe('DexScreenerCollector', () => {
       sink,
       watched: () => mints,
       http: new HttpClient({ fetch }),
-      pairLimiter: new TokenBucket(5, 5, () => t, async (ms) => void (t += ms)),
+      pairLimiter: new TokenBucket(
+        5,
+        5,
+        () => t,
+        async (ms) => void (t += ms),
+      ),
       metrics,
       now: () => NOW,
     });
@@ -135,14 +169,31 @@ describe('DexScreenerCollector', () => {
     const fetch = async (url: string) => {
       n++;
       if (n === 1) return new Response('{}', { status: 429 });
-      if (url.includes('token-profiles')) return new Response(JSON.stringify([{ chainId: 'solana', tokenAddress: MINT, description: 'p' }]), { status: 200 });
-      return new Response(JSON.stringify([{ chainId: 'solana', tokenAddress: MINT, amount: 5 }, { bad: true }]), { status: 200 });
+      if (url.includes('token-profiles'))
+        return new Response(JSON.stringify([{ chainId: 'solana', tokenAddress: MINT, description: 'p' }]), {
+          status: 200,
+        });
+      return new Response(JSON.stringify([{ chainId: 'solana', tokenAddress: MINT, amount: 5 }, { bad: true }]), {
+        status: 200,
+      });
     };
     const sink = new MemorySignalSink();
     const metrics = new ScoutMetrics();
     let t = 0;
-    const profileLimiter = new TokenBucket(2, 1, () => t, async (ms) => void (t += ms));
-    const c = new DexScreenerCollector({ sink, watched: () => [], http: new HttpClient({ fetch, sleep: async () => undefined }), profileLimiter, metrics, now: () => NOW });
+    const profileLimiter = new TokenBucket(
+      2,
+      1,
+      () => t,
+      async (ms) => void (t += ms),
+    );
+    const c = new DexScreenerCollector({
+      sink,
+      watched: () => [],
+      http: new HttpClient({ fetch, sleep: async () => undefined }),
+      profileLimiter,
+      metrics,
+      now: () => NOW,
+    });
     await c.pollProfilesAndBoosts();
     expect(n).toBe(3);
     expect(sink.events.map((e) => e.kind)).toEqual(['token_profile', 'boost']);
@@ -156,7 +207,7 @@ describe('DexScreenerCollector', () => {
     try {
       let calls = 0;
       let hold = true;
-      const pending: Array<() => void> = [];
+      const pending: (() => void)[] = [];
       const fetch = async (url: string) => {
         calls++;
         if (hold) await new Promise<void>((r) => pending.push(r));
@@ -187,6 +238,9 @@ describe('DexScreenerCollector', () => {
   });
 
   it('rejects a non-https base URL', () => {
-    expect(() => new DexScreenerCollector({ sink: new MemorySignalSink(), watched: () => [], baseUrl: 'http://evil.example' })).toThrow();
+    expect(
+      () =>
+        new DexScreenerCollector({ sink: new MemorySignalSink(), watched: () => [], baseUrl: 'http://evil.example' }),
+    ).toThrow();
   });
 });

@@ -36,7 +36,12 @@ export interface Logger {
   error(obj: object, msg?: string): void;
 }
 
-export const silentLogger: Logger = { debug() {}, info() {}, warn() {}, error() {} };
+export const silentLogger: Logger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
 
 export interface TraderAlert {
   level: 'warning' | 'critical';
@@ -96,7 +101,10 @@ export interface NewOrder {
 export interface OrderRepository {
   create(o: NewOrder): Promise<void>;
   markSubmitted(id: string, at: Date): Promise<void>;
-  markLanded(id: string, r: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint }): Promise<void>;
+  markLanded(
+    id: string,
+    r: { at: Date; signature: string | null; lamports: bigint; tokenAmount: bigint | null; feeLamports: bigint },
+  ): Promise<void>;
   markFailed(id: string, r: { at: Date; error: string; feeLamports: bigint; signature?: string | null }): Promise<void>;
   attachPosition(id: string, positionId: string): Promise<void>;
 }

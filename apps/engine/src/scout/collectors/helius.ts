@@ -141,7 +141,10 @@ export class HeliusStreamCollector implements Collector {
     try {
       ws = this.factory(this.opts.url);
     } catch (e) {
-      this.logger.warn({ url: redactUrl(this.opts.url), err: e instanceof Error ? e.name : 'Error' }, 'helius connect failed');
+      this.logger.warn(
+        { url: redactUrl(this.opts.url), err: e instanceof Error ? e.name : 'Error' },
+        'helius connect failed',
+      );
       this.scheduleReconnect();
       return;
     }
@@ -189,7 +192,10 @@ export class HeliusStreamCollector implements Collector {
 
   private scheduleReconnect(): void {
     if (!this.running || this.reconnectTimer) return;
-    const delay = Math.max(250, backoffDelay(this.attempt, this.opts.baseBackoffMs ?? 1_000, this.opts.maxBackoffMs ?? 30_000, this.opts.random));
+    const delay = Math.max(
+      250,
+      backoffDelay(this.attempt, this.opts.baseBackoffMs ?? 1_000, this.opts.maxBackoffMs ?? 30_000, this.opts.random),
+    );
     this.attempt++;
     this.reconnects++;
     this.opts.metrics?.inc('helius.reconnects');
@@ -259,7 +265,13 @@ export class HeliusStreamCollector implements Collector {
 
   private emitEvent(e: ParsedLogEvent, slot: number | null): void {
     const kind =
-      e.kind === 'new_token' ? SignalKinds.newToken : e.kind === 'migration' ? SignalKinds.migration : e.kind === 'new_pool' ? SignalKinds.newPool : SignalKinds.unresolvedTx;
+      e.kind === 'new_token'
+        ? SignalKinds.newToken
+        : e.kind === 'migration'
+          ? SignalKinds.migration
+          : e.kind === 'new_pool'
+            ? SignalKinds.newPool
+            : SignalKinds.unresolvedTx;
     this.opts.metrics?.inc(`helius.${kind}`);
     this.opts.sink.emit({
       source: 'helius',

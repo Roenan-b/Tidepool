@@ -1,12 +1,20 @@
 # Tidepool
 
+[![CI](https://github.com/Roenan-b/Tidepool/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Roenan-b/Tidepool/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Roenan-b/Tidepool/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Roenan-b/Tidepool/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Roenan-b/Tidepool/badge)](https://securityscorecards.dev/viewer/?uri=github.com/Roenan-b/Tidepool)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=node.js&logoColor=white)](.nvmrc)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+[![License](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)](#license)
+
 A Solana meme coin trading system with three cooperating agents behind one Start button, built for controls first and returns second. It runs in **paper mode by default**; live trading is impossible until a config flag, an owner confirmation and a separate signer are all in place.
 
-| Agent | Job | Can it spend? |
-| --- | --- | --- |
-| **Scout** | Watches new pools, trending pairs and social chatter, filters unsafe tokens, ranks candidates with an expiry | No |
-| **Trader** | Takes top candidates, sizes entries, builds swaps, manages take-profit, stop-loss and time-stop exits with deterministic rules | Only inside a reservation the Risk Officer approved |
-| **Risk Officer** | Owns the money ledger, approves or vetoes each trade, enforces limits and the daily loss limit, runs the kill switch, reconciles the ledger against the chain | No, but it can halt and force exits |
+| Agent            | Job                                                                                                                                                           | Can it spend?                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Scout**        | Watches new pools, trending pairs and social chatter, filters unsafe tokens, ranks candidates with an expiry                                                  | No                                                  |
+| **Trader**       | Takes top candidates, sizes entries, builds swaps, manages take-profit, stop-loss and time-stop exits with deterministic rules                                | Only inside a reservation the Risk Officer approved |
+| **Risk Officer** | Owns the money ledger, approves or vetoes each trade, enforces limits and the daily loss limit, runs the kill switch, reconciles the ledger against the chain | No, but it can halt and force exits                 |
 
 ## Contents
 
@@ -19,6 +27,8 @@ A Solana meme coin trading system with three cooperating agents behind one Start
 7. [Going live: checklist](#going-live-checklist)
 8. [Security model](#security-model)
 9. [Known limitations](#known-limitations)
+10. [Development](#development)
+11. [License](#license)
 
 ## Architecture
 
@@ -35,13 +45,13 @@ A Solana meme coin trading system with three cooperating agents behind one Start
  Dashboard (Next.js, macOS-style) ──server side only──> Engine control API (127.0.0.1, bearer token)
 ```
 
-| Path | What it is |
-| --- | --- |
-| `packages/core` | Shared types, presets, cost model, reservation tickets, API contract |
-| `apps/engine` | One process running Scout, Trader and Risk Officer, plus the control API, backtest harness and alerts |
-| `apps/signer` | Separate process; the only component that ever holds the wallet key |
-| `apps/dashboard` | Jake's one-button view (`/`) and the operations view (`/ops`) |
-| `db/migrations` | Postgres schema |
+| Path             | What it is                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/core`  | Shared types, presets, cost model, reservation tickets, API contract                                  |
+| `apps/engine`    | One process running Scout, Trader and Risk Officer, plus the control API, backtest harness and alerts |
+| `apps/signer`    | Separate process; the only component that ever holds the wallet key                                   |
+| `apps/dashboard` | Jake's one-button view (`/`) and the operations view (`/ops`)                                         |
+| `db/migrations`  | Postgres schema                                                                                       |
 
 Design rules the code enforces:
 
@@ -53,7 +63,7 @@ Design rules the code enforces:
 
 ## Quick start (paper mode)
 
-Prerequisites: Node.js 20.11 or newer, npm 10, Docker (for Postgres) or a local Postgres 16.
+Prerequisites: Node.js 22.13 or newer (see `.nvmrc`), npm 10, Docker (for Postgres) or a local Postgres 16.
 
 ```bash
 npm install
@@ -100,15 +110,15 @@ Demo mode serves fixture data, disables every action and refuses to run when an 
 
 Every variable is documented in [`.env.example`](.env.example). The ones that matter first:
 
-| Variable | Purpose |
-| --- | --- |
-| `LIVE_TRADING_ENABLED` | Must be exactly `true` for live mode to be possible at all. Default `false`. |
-| `PAPER_STARTING_SOL` | Starting balance of the paper pool |
-| `SOLANA_RPC_URL`, `HELIUS_*` | Chain reads. A Helius RPC URL also enables holder-count growth, which social signals need before they can raise a score. |
-| `JUPITER_BASE_URL`, `JUPITER_API_KEY` | Quotes for paper fills and swaps for live trading |
-| `LUNARCRUSH_API_KEY`, `X_BEARER_TOKEN`, `X_CURATED_USER_IDS` | Optional social sources. X reads are pay per read and capped by `X_MAX_READS_PER_HOUR`. |
-| `NARRATIVE_API_URL`, `NARRATIVE_API_KEY`, `NARRATIVE_MODEL` | Optional narrative classifier (any endpoint that speaks the common chat completions format) |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Alerts: halts, kill switch, reconciliation errors, daily summary |
+| Variable                                                     | Purpose                                                                                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `LIVE_TRADING_ENABLED`                                       | Must be exactly `true` for live mode to be possible at all. Default `false`.                                             |
+| `PAPER_STARTING_SOL`                                         | Starting balance of the paper pool                                                                                       |
+| `SOLANA_RPC_URL`, `HELIUS_*`                                 | Chain reads. A Helius RPC URL also enables holder-count growth, which social signals need before they can raise a score. |
+| `JUPITER_BASE_URL`, `JUPITER_API_KEY`                        | Quotes for paper fills and swaps for live trading                                                                        |
+| `LUNARCRUSH_API_KEY`, `X_BEARER_TOKEN`, `X_CURATED_USER_IDS` | Optional social sources. X reads are pay per read and capped by `X_MAX_READS_PER_HOUR`.                                  |
+| `NARRATIVE_API_URL`, `NARRATIVE_API_KEY`, `NARRATIVE_MODEL`  | Optional narrative classifier (any endpoint that speaks the common chat completions format)                              |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`                     | Alerts: halts, kill switch, reconciliation errors, daily summary                                                         |
 
 Risk presets (Conservative, Balanced, Aggressive) live in `packages/core/src/presets.ts`. Jake picks a preset; raw parameters are not editable from his screen.
 
@@ -176,6 +186,19 @@ Nothing below is automated on purpose. Do these in order and do not skip the pap
 - **Helius log parsing is best effort.** pump.fun create and complete events resolve to mints; other new-pool events are recorded by signature only.
 - **Latency and information edge:** this system will usually be later to a move than professional firms and launch insiders. Its aim is to lose small when wrong and never more than the agreed limits.
 - **Returns:** a fixed $200 a day is not a realistic target for a small pool after costs. It appears on the dashboard only as a reference line.
+
+## Development
+
+| Command             | What it does                                                         |
+| ------------------- | -------------------------------------------------------------------- |
+| `npm run lint`      | ESLint with type-aware `typescript-eslint` rules, zero warnings      |
+| `npm run format`    | Prettier across the repository (`format:check` verifies only)        |
+| `npm run typecheck` | `tsc` in every workspace, tests included                             |
+| `npm test`          | Vitest in every workspace (`test:coverage` enforces coverage floors) |
+| `npm run build`     | Compiles `core`, `engine` and `signer`                               |
+| `npm run check`     | Format, lint, typecheck and tests in one go                          |
+
+`npm install` sets up Git hooks: staged files are linted and formatted on commit, and commit messages are checked against [Conventional Commits](https://www.conventionalcommits.org). CI runs the same checks on every push and pull request, on Node 22 and 24, against a real Postgres. Releases and `CHANGELOG.md` are produced by Release Please from commit messages. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 

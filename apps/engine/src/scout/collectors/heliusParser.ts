@@ -15,7 +15,12 @@ export const PUMP_SWAP_PROGRAM_ID = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA
 export const RAYDIUM_AMM_V4_PROGRAM_ID = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
 export const RAYDIUM_CPMM_PROGRAM_ID = 'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C';
 
-export const DEFAULT_STREAM_PROGRAMS = [PUMP_FUN_PROGRAM_ID, PUMP_SWAP_PROGRAM_ID, RAYDIUM_AMM_V4_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID];
+export const DEFAULT_STREAM_PROGRAMS = [
+  PUMP_FUN_PROGRAM_ID,
+  PUMP_SWAP_PROGRAM_ID,
+  RAYDIUM_AMM_V4_PROGRAM_ID,
+  RAYDIUM_CPMM_PROGRAM_ID,
+];
 
 export type ParsedKind = 'new_token' | 'migration' | 'new_pool' | 'unresolved_tx';
 
@@ -74,7 +79,9 @@ class Reader {
 }
 
 /** Decodes a pump.fun CreateEvent or CompleteEvent payload. Returns null for any other data. */
-export function decodePumpEvent(b64: string): { event: 'create' | 'complete'; mint: string; details: Record<string, string> } | null {
+export function decodePumpEvent(
+  b64: string,
+): { event: 'create' | 'complete'; mint: string; details: Record<string, string> } | null {
   let buf: Buffer;
   try {
     buf = Buffer.from(b64, 'base64');
@@ -125,12 +132,15 @@ const DATA_RE = /^Program data: ([A-Za-z0-9+/=]{1,8000})$/;
  * Parses one log notification into zero or more listing events. Failed transactions yield nothing.
  * `programs` limits which program ids are recognized.
  */
-export function parseLogNotification(n: LogNotification, programs: readonly string[] = DEFAULT_STREAM_PROGRAMS): ParsedLogEvent[] {
+export function parseLogNotification(
+  n: LogNotification,
+  programs: readonly string[] = DEFAULT_STREAM_PROGRAMS,
+): ParsedLogEvent[] {
   if (n.err !== null && n.err !== undefined) return [];
   const allowed = new Set(programs);
   const stack: string[] = [];
   const found: ParsedLogEvent[] = [];
-  const pending: Array<{ program: string; instruction: string; kind: ParsedKind }> = [];
+  const pending: { program: string; instruction: string; kind: ParsedKind }[] = [];
 
   for (const raw of n.logs.slice(0, 2000)) {
     const line = typeof raw === 'string' ? raw : '';
@@ -163,16 +173,32 @@ export function parseLogNotification(n: LogNotification, programs: readonly stri
         const ev = decodePumpEvent(m[1]!);
         if (!ev) continue;
         const kind: ParsedKind = ev.event === 'create' ? 'new_token' : 'migration';
-        found.push({ kind, program: current, instruction: ev.event === 'create' ? 'Create' : 'Complete', signature: n.signature, mint: ev.mint, details: ev.details });
+        found.push({
+          kind,
+          program: current,
+          instruction: ev.event === 'create' ? 'Create' : 'Complete',
+          signature: n.signature,
+          mint: ev.mint,
+          details: ev.details,
+        });
       }
     }
   }
 
   // Instructions whose mint was not recovered from event data are reported for enrichment.
   for (const p of pending) {
-    const resolved = found.some((f) => f.program === p.program && (f.kind === p.kind || (p.kind === 'migration' && f.kind === 'migration')));
+    const resolved = found.some(
+      (f) => f.program === p.program && (f.kind === p.kind || (p.kind === 'migration' && f.kind === 'migration')),
+    );
     if (!resolved) {
-      found.push({ kind: 'unresolved_tx', program: p.program, instruction: p.instruction, signature: n.signature, mint: null, details: { intendedKind: p.kind } });
+      found.push({
+        kind: 'unresolved_tx',
+        program: p.program,
+        instruction: p.instruction,
+        signature: n.signature,
+        mint: null,
+        details: { intendedKind: p.kind },
+      });
     }
   }
 

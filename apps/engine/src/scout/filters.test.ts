@@ -25,17 +25,29 @@ describe('evaluateSafety', () => {
     expect(evaluateSafety(safe({ ageSeconds: filters.maxAgeSeconds }), filters).pass).toBe(true);
   });
 
-  const cases: Array<[string, Partial<TokenSafety>, string]> = [
+  const cases: [string, Partial<TokenSafety>, string][] = [
     ['liquidity just below the floor', { liquidityUsd: filters.minLiquidityUsd - 0.01 }, 'liquidity_below_min'],
-    ['holder share just above the cap', { top10HolderShare: filters.maxTop10HolderShare + 1e-9 }, 'top10_holder_share_above_max'],
+    [
+      'holder share just above the cap',
+      { top10HolderShare: filters.maxTop10HolderShare + 1e-9 },
+      'top10_holder_share_above_max',
+    ],
     ['age one second too young', { ageSeconds: filters.minAgeSeconds - 1 }, 'token_too_new'],
     ['age one second too old', { ageSeconds: filters.maxAgeSeconds + 1 }, 'token_too_old'],
-    ['sell ratio just below the minimum', { sellSimulationRatio: filters.minSellSimulationRatio - 1e-9 }, 'sell_simulation_below_min'],
+    [
+      'sell ratio just below the minimum',
+      { sellSimulationRatio: filters.minSellSimulationRatio - 1e-9 },
+      'sell_simulation_below_min',
+    ],
     ['missing sell simulation', { sellSimulationRatio: null }, 'sell_simulation_missing'],
     ['mint authority present', { mintAuthorityRevoked: false }, 'mint_authority_not_revoked'],
     ['freeze authority present', { freezeAuthorityRevoked: false }, 'freeze_authority_not_revoked'],
     ['flagged creator', { creatorFlagged: true }, 'creator_flagged'],
-    ['banned extension', { token2022Extensions: ['permanentDelegate'] }, 'banned_token2022_extension:permanentDelegate'],
+    [
+      'banned extension',
+      { token2022Extensions: ['permanentDelegate'] },
+      'banned_token2022_extension:permanentDelegate',
+    ],
     ['NaN liquidity', { liquidityUsd: Number.NaN }, 'invalid_safety_data'],
     ['infinite sell ratio', { sellSimulationRatio: Number.POSITIVE_INFINITY }, 'sell_simulation_below_min'],
     ['negative holder share', { top10HolderShare: -0.1 }, 'top10_holder_share_above_max'],
@@ -49,19 +61,34 @@ describe('evaluateSafety', () => {
   }
 
   it('rejects extensions outside the vetted list and malformed extension data', () => {
-    for (const ext of ['pausableConfig', 'confidentialMintBurn', 'scaledUiAmountConfig', 'unparseableExtension', 'someFutureExtension']) {
+    for (const ext of [
+      'pausableConfig',
+      'confidentialMintBurn',
+      'scaledUiAmountConfig',
+      'unparseableExtension',
+      'someFutureExtension',
+    ]) {
       const r = evaluateSafety(safe({ token2022Extensions: [ext] }), filters);
       expect(r.pass).toBe(false);
       expect(r.reasons).toEqual([`unvetted_token2022_extension:${ext}`]);
     }
     // Banned names match case-insensitively, as in the Risk Officer re-check.
-    expect(evaluateSafety(safe({ token2022Extensions: ['TransferHook'] }), filters).reasons).toEqual(['banned_token2022_extension:TransferHook']);
-    expect(evaluateSafety(safe({ token2022Extensions: undefined as unknown as string[] }), filters)).toEqual({ pass: false, reasons: ['invalid_safety_data'] });
+    expect(evaluateSafety(safe({ token2022Extensions: ['TransferHook'] }), filters).reasons).toEqual([
+      'banned_token2022_extension:TransferHook',
+    ]);
+    expect(evaluateSafety(safe({ token2022Extensions: undefined as unknown as string[] }), filters)).toEqual({
+      pass: false,
+      reasons: ['invalid_safety_data'],
+    });
   });
 
   it('allows unbanned extensions and an optional missing simulation for the ranking pass', () => {
-    expect(evaluateSafety(safe({ token2022Extensions: ['metadataPointer', 'tokenMetadata'] }), filters).pass).toBe(true);
-    expect(evaluateSafety(safe({ sellSimulationRatio: null }), filters, { allowMissingSellSimulation: true }).pass).toBe(true);
+    expect(evaluateSafety(safe({ token2022Extensions: ['metadataPointer', 'tokenMetadata'] }), filters).pass).toBe(
+      true,
+    );
+    expect(
+      evaluateSafety(safe({ sellSimulationRatio: null }), filters, { allowMissingSellSimulation: true }).pass,
+    ).toBe(true);
   });
 
   it('collects every failing reason', () => {

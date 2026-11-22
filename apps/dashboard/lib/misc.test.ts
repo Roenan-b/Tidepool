@@ -18,7 +18,11 @@ describe('content security policy', () => {
 
 describe('createUser argument parsing', () => {
   it('parses create with role', () => {
-    expect(parseArgs(['create', '--username', 'jake', '--role', 'owner'])).toEqual({ command: 'create', username: 'jake', role: 'owner' });
+    expect(parseArgs(['create', '--username', 'jake', '--role', 'owner'])).toEqual({
+      command: 'create',
+      username: 'jake',
+      role: 'owner',
+    });
   });
   it('refuses passwords in argv and bad input', () => {
     expect(() => parseArgs(['create', '--username', 'jake', '--role', 'owner', '--password', 'x'])).toThrow(/stdin/);
@@ -70,7 +74,10 @@ describe('bounded body reading', () => {
   it('reads a small chunked JSON body and still checks the content type', async () => {
     expect(await readJsonBody(chunkedRequest(['{"a":', '1}']).req)).toEqual({ ok: true, value: { a: 1 } });
     expect((await readJsonBody(chunkedRequest(['{}'], { 'content-type': 'text/plain' }).req)).ok).toBe(false);
-    expect(await readJsonBody({ headers: new Headers({ 'content-type': 'application/json' }), body: null })).toEqual({ ok: true, value: {} });
+    expect(await readJsonBody({ headers: new Headers({ 'content-type': 'application/json' }), body: null })).toEqual({
+      ok: true,
+      value: {},
+    });
   });
 
   it('decodes multi-byte UTF-8 split across chunks', async () => {

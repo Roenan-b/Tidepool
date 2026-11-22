@@ -30,6 +30,11 @@ export function presetSummaries(): PresetSummary[] {
   });
 }
 
-export function publicViewer(v: Viewer): { username: string; role: Viewer['role']; demo: boolean; totpEnabled: boolean } {
+export function publicViewer(v: Viewer): {
+  username: string;
+  role: Viewer['role'];
+  demo: boolean;
+  totpEnabled: boolean;
+} {
   return { username: v.username, role: v.role, demo: v.demo, totpEnabled: v.totpEnabled };
 }

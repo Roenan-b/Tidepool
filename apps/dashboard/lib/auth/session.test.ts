@@ -41,7 +41,13 @@ describe('session tokens', () => {
   it('uses __Host- cookies when secure and strict same-site always', () => {
     expect(cookieNames(true).session).toBe('__Host-tp_session');
     expect(cookieNames(false).session).toBe('tp_session');
-    expect(cookieOptions(false, 60)).toEqual({ httpOnly: true, secure: false, sameSite: 'strict', path: '/', maxAge: 60 });
+    expect(cookieOptions(false, 60)).toEqual({
+      httpOnly: true,
+      secure: false,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 60,
+    });
   });
 });
 

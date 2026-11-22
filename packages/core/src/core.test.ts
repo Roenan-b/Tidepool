@@ -9,9 +9,16 @@ const SECRET = 'x'.repeat(64);
 function ticket(overrides: Partial<ReservationTicket> = {}): ReservationTicket {
   const now = Date.now();
   return {
-    v: 1, reservationId: 'r1', intent: 'buy', mint: 'So11111111111111111111111111111111111111112',
-    maxLamports: '100000000', maxTipLamports: '1000000', destination: null,
-    issuedAt: now, expiresAt: now + 60_000, ...overrides,
+    v: 1,
+    reservationId: 'r1',
+    intent: 'buy',
+    mint: 'So11111111111111111111111111111111111111112',
+    maxLamports: '100000000',
+    maxTipLamports: '1000000',
+    destination: null,
+    issuedAt: now,
+    expiresAt: now + 60_000,
+    ...overrides,
   };
 }
 
@@ -75,12 +82,21 @@ describe('reservation tickets', () => {
   });
   it('rejects the wrong secret, expiry, malformed mac and future issue time', () => {
     expect(verifyTicket(signTicket(ticket(), SECRET), 'y'.repeat(64)).ok).toBe(false);
-    expect(verifyTicket(signTicket(ticket({ expiresAt: Date.now() - 1 }), SECRET), SECRET)).toMatchObject({ reason: 'ticket expired' });
+    expect(verifyTicket(signTicket(ticket({ expiresAt: Date.now() - 1 }), SECRET), SECRET)).toMatchObject({
+      reason: 'ticket expired',
+    });
     expect(verifyTicket({ ticket: ticket(), mac: 'zz' }, SECRET)).toMatchObject({ reason: 'malformed mac' });
-    expect(verifyTicket(signTicket(ticket({ issuedAt: Date.now() + 60_000, expiresAt: Date.now() + 120_000 }), SECRET), SECRET)).toMatchObject({ reason: 'ticket issued in the future' });
+    expect(
+      verifyTicket(
+        signTicket(ticket({ issuedAt: Date.now() + 60_000, expiresAt: Date.now() + 120_000 }), SECRET),
+        SECRET,
+      ),
+    ).toMatchObject({ reason: 'ticket issued in the future' });
   });
   it('requires a destination on withdraw tickets and a strong secret', () => {
-    expect(verifyTicket(signTicket(ticket({ intent: 'withdraw', mint: null }), SECRET), SECRET)).toMatchObject({ ok: false });
+    expect(verifyTicket(signTicket(ticket({ intent: 'withdraw', mint: null }), SECRET), SECRET)).toMatchObject({
+      ok: false,
+    });
     expect(() => signTicket(ticket(), 'short')).toThrow();
   });
 });

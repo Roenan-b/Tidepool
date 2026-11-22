@@ -24,14 +24,19 @@ export interface AccessRule {
 
 export type AccessDecision =
   | { ok: true }
-  | { ok: false; status: 401 | 403; code: 'unauthenticated' | 'totp_enrollment_required' | 'forbidden' | 'demo_read_only' };
+  | {
+      ok: false;
+      status: 401 | 403;
+      code: 'unauthenticated' | 'totp_enrollment_required' | 'forbidden' | 'demo_read_only';
+    };
 
 export function authorize(viewer: Viewer | null, rule: AccessRule): AccessDecision {
   if (!viewer) return { ok: false, status: 401, code: 'unauthenticated' };
   if (viewer.demo) {
     return rule.mutating ? { ok: false, status: 403, code: 'demo_read_only' } : { ok: true };
   }
-  if (!viewer.totpEnabled && !rule.allowWithoutTotp) return { ok: false, status: 403, code: 'totp_enrollment_required' };
+  if (!viewer.totpEnabled && !rule.allowWithoutTotp)
+    return { ok: false, status: 403, code: 'totp_enrollment_required' };
   if (!rule.roles.includes(viewer.role)) return { ok: false, status: 403, code: 'forbidden' };
   return { ok: true };
 }

@@ -3,10 +3,16 @@ import { ScoutMetrics } from './metrics.js';
 import { FanoutSink, MemorySignalSink, PgSignalSink } from './sink.js';
 import type { Queryable, SignalEvent } from './types.js';
 
-const ev = (i: number): SignalEvent => ({ source: 'dexscreener', mint: `m${i}`, kind: 'k', observedAt: new Date(0), payload: { i } });
+const ev = (i: number): SignalEvent => ({
+  source: 'dexscreener',
+  mint: `m${i}`,
+  kind: 'k',
+  observedAt: new Date(0),
+  payload: { i },
+});
 
 function fakeDb(fail = false) {
-  const queries: Array<{ text: string; params: unknown[] }> = [];
+  const queries: { text: string; params: unknown[] }[] = [];
   const db: Queryable = {
     query: async (text: string, params?: unknown[]) => {
       if (fail) throw new Error('db down');
@@ -57,7 +63,14 @@ describe('PgSignalSink', () => {
 describe('FanoutSink', () => {
   it('isolates a throwing sink', () => {
     const mem = new MemorySignalSink();
-    const f = new FanoutSink([{ emit: () => { throw new Error('x'); } }, mem]);
+    const f = new FanoutSink([
+      {
+        emit: () => {
+          throw new Error('x');
+        },
+      },
+      mem,
+    ]);
     f.emit(ev(1));
     expect(mem.events).toHaveLength(1);
   });

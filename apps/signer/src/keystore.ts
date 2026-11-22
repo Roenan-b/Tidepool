@@ -26,27 +26,42 @@ const IV_LEN = 12;
 const TAG_LEN = 16;
 const SECRET_KEY_LEN = 64;
 
-const b64 = z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).max(512);
+const b64 = z
+  .string()
+  .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+  .max(512);
 
-const KeystoreSchema = z.object({
-  version: z.literal(1),
-  publicKey: z.string().min(32).max(44),
-  kdf: z.object({
-    name: z.literal('scrypt'),
-    // Bounded so a crafted file cannot force huge memory or CPU use at load time.
-    N: z.number().int().refine((n) => n >= 1 << 14 && n <= 1 << 20 && (n & (n - 1)) === 0, 'N must be a power of two in [2^14, 2^20]'),
-    r: z.number().int().min(8).max(16),
-    p: z.number().int().min(1).max(4),
-    dkLen: z.literal(KEY_LEN),
-    salt: b64,
-  }).strict(),
-  cipher: z.object({
-    name: z.literal('aes-256-gcm'),
-    iv: b64,
-    tag: b64,
-    ciphertext: b64,
-  }).strict(),
-}).strict();
+const KeystoreSchema = z
+  .object({
+    version: z.literal(1),
+    publicKey: z.string().min(32).max(44),
+    kdf: z
+      .object({
+        name: z.literal('scrypt'),
+        // Bounded so a crafted file cannot force huge memory or CPU use at load time.
+        N: z
+          .number()
+          .int()
+          .refine(
+            (n) => n >= 1 << 14 && n <= 1 << 20 && (n & (n - 1)) === 0,
+            'N must be a power of two in [2^14, 2^20]',
+          ),
+        r: z.number().int().min(8).max(16),
+        p: z.number().int().min(1).max(4),
+        dkLen: z.literal(KEY_LEN),
+        salt: b64,
+      })
+      .strict(),
+    cipher: z
+      .object({
+        name: z.literal('aes-256-gcm'),
+        iv: b64,
+        tag: b64,
+        ciphertext: b64,
+      })
+      .strict(),
+  })
+  .strict();
 
 export type KeystoreFile = z.infer<typeof KeystoreSchema>;
 
@@ -62,15 +77,37 @@ function assertPassphrase(passphrase: string): void {
 }
 
 function aad(ks: Pick<KeystoreFile, 'version' | 'publicKey' | 'kdf' | 'cipher'>): Buffer {
-  return Buffer.from(JSON.stringify([ks.version, ks.publicKey, ks.kdf.name, ks.kdf.N, ks.kdf.r, ks.kdf.p, ks.kdf.dkLen, ks.kdf.salt, ks.cipher.name]), 'utf8');
+  return Buffer.from(
+    JSON.stringify([
+      ks.version,
+      ks.publicKey,
+      ks.kdf.name,
+      ks.kdf.N,
+      ks.kdf.r,
+      ks.kdf.p,
+      ks.kdf.dkLen,
+      ks.kdf.salt,
+      ks.cipher.name,
+    ]),
+    'utf8',
+  );
 }
 
 function deriveKey(passphrase: string, salt: Buffer, N: number, r: number, p: number): Buffer {
-  return scryptSync(passphrase.normalize('NFKC'), salt, KEY_LEN, { N, r, p, maxmem: 128 * N * r * p + 64 * 1024 * 1024 });
+  return scryptSync(passphrase.normalize('NFKC'), salt, KEY_LEN, {
+    N,
+    r,
+    p,
+    maxmem: 128 * N * r * p + 64 * 1024 * 1024,
+  });
 }
 
 /** Encrypts a 64-byte Solana secret key. The caller owns `secretKeyBytes` and should zero it afterwards. */
-export function createKeystore(secretKeyBytes: Uint8Array, passphrase: string, options: CreateKeystoreOptions = {}): KeystoreFile {
+export function createKeystore(
+  secretKeyBytes: Uint8Array,
+  passphrase: string,
+  options: CreateKeystoreOptions = {},
+): KeystoreFile {
   assertPassphrase(passphrase);
   if (!(secretKeyBytes instanceof Uint8Array) || secretKeyBytes.length !== SECRET_KEY_LEN) {
     throw new Error('secret key must be 64 bytes');
@@ -93,7 +130,12 @@ export function createKeystore(secretKeyBytes: Uint8Array, passphrase: string, o
     const ciphertext = Buffer.concat([cipher.update(secretKeyBytes), cipher.final()]);
     const ks: KeystoreFile = {
       ...header,
-      cipher: { name: 'aes-256-gcm', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), ciphertext: ciphertext.toString('base64') },
+      cipher: {
+        name: 'aes-256-gcm',
+        iv: iv.toString('base64'),
+        tag: cipher.getAuthTag().toString('base64'),
+        ciphertext: ciphertext.toString('base64'),
+      },
     };
     return KeystoreSchema.parse(ks);
   } finally {
@@ -128,7 +170,7 @@ export function decryptKeystore(ks: KeystoreFile, passphrase: string): Keypair {
     throw new Error('keystore has an invalid format');
   }
   const key = deriveKey(passphrase, salt, ks.kdf.N, ks.kdf.r, ks.kdf.p);
-  let plain: Buffer | null = null;
+  let plain: Buffer;
   try {
     const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_LEN });
     decipher.setAAD(aad(ks));
@@ -205,7 +247,11 @@ export function parseSecretKeyText(text: string): Uint8Array {
     } catch {
       throw new Error('secret key JSON is malformed');
     }
-    if (!Array.isArray(arr) || arr.length !== SECRET_KEY_LEN || !arr.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+    if (
+      !Array.isArray(arr) ||
+      arr.length !== SECRET_KEY_LEN ||
+      !arr.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)
+    ) {
       throw new Error('secret key JSON must be an array of 64 byte values');
     }
     bytes = Uint8Array.from(arr as number[]);

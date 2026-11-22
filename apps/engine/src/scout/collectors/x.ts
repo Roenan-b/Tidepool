@@ -18,19 +18,29 @@ const tweetSchema = z.object({
   text: z.string(),
   created_at: z.string().optional(),
   author_id: z.string().optional(),
-  entities: z.object({ cashtags: z.array(z.object({ tag: z.string() })).optional() }).partial().optional().nullable(),
+  entities: z
+    .object({ cashtags: z.array(z.object({ tag: z.string() })).optional() })
+    .partial()
+    .optional()
+    .nullable(),
 });
 
 const userSchema = z.object({
   id: z.string(),
   created_at: z.string().optional(),
   verified: z.boolean().optional(),
-  public_metrics: z.object({ followers_count: z.number().optional(), following_count: z.number().optional() }).partial().optional(),
+  public_metrics: z
+    .object({ followers_count: z.number().optional(), following_count: z.number().optional() })
+    .partial()
+    .optional(),
 });
 
 const timelineSchema = z.object({
   data: z.array(z.unknown()).optional(),
-  includes: z.object({ users: z.array(z.unknown()).optional() }).partial().optional(),
+  includes: z
+    .object({ users: z.array(z.unknown()).optional() })
+    .partial()
+    .optional(),
   meta: z.object({ newest_id: z.string().optional(), result_count: z.number().optional() }).partial().optional(),
 });
 
@@ -86,7 +96,9 @@ export class XCuratedCollector implements Collector {
     this.userIds = [...new Set(opts.userIds.map((s) => s.trim()).filter((s) => /^\d{1,20}$/.test(s)))].slice(0, 500);
     this.enabled = !!opts.bearerToken && this.userIds.length > 0 && opts.maxReadsPerHour > 0;
     this.now = opts.now ?? (() => new Date());
-    this.budget = new WindowBudget(Math.max(0, Math.floor(opts.maxReadsPerHour)), 3_600_000, () => this.now().getTime());
+    this.budget = new WindowBudget(Math.max(0, Math.floor(opts.maxReadsPerHour)), 3_600_000, () =>
+      this.now().getTime(),
+    );
     this.http = opts.http ?? new HttpClient({ maxRetries: 1, secrets: opts.bearerToken ? [opts.bearerToken] : [] });
     this.logger = opts.logger ?? noopLogger;
   }
@@ -100,7 +112,7 @@ export class XCuratedCollector implements Collector {
     this.timer = setInterval(() => {
       if (this.inflight) return;
       this.inflight = this.pollOnce()
-        .catch((e) => this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'x poll failed'))
+        .catch((e: unknown) => this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'x poll failed'))
         .finally(() => {
           this.inflight = null;
         });
@@ -140,7 +152,7 @@ export class XCuratedCollector implements Collector {
     const since = this.sinceId.get(userId);
     if (since) params.set('since_id', since);
     const body = await this.http.json(`${base}/2/users/${userId}/tweets?${params.toString()}`, timelineSchema, {
-      headers: { authorization: `Bearer ${this.opts.bearerToken}` },
+      headers: { authorization: `Bearer ${String(this.opts.bearerToken)}` },
       // The reservation above covers exactly one request; a retry could be billed again.
       maxRetries: 0,
     });
@@ -164,7 +176,10 @@ export class XCuratedCollector implements Collector {
 
     for (const t of tweets.records) {
       const text = sanitizeText(t.text, 500);
-      const cashtags = extractCashtags(text, (t.entities?.cashtags ?? []).map((c) => c.tag));
+      const cashtags = extractCashtags(
+        text,
+        (t.entities?.cashtags ?? []).map((c) => c.tag),
+      );
       const mints = new Map<string, 'mint' | 'cashtag'>();
       for (const m of extractMints(text)) mints.set(m, 'mint');
       for (const tag of cashtags) {
@@ -175,10 +190,22 @@ export class XCuratedCollector implements Collector {
       const observedAt = Number.isFinite(postedMs) && postedMs <= nowMs ? new Date(postedMs) : this.now();
       const payload = { postId: t.id, authorId: userId, text, cashtags, quality };
       if (mints.size === 0) {
-        this.opts.sink.emit({ source: 'x', mint: null, kind: SignalKinds.post, observedAt, payload: { ...payload, matchedBy: null } });
+        this.opts.sink.emit({
+          source: 'x',
+          mint: null,
+          kind: SignalKinds.post,
+          observedAt,
+          payload: { ...payload, matchedBy: null },
+        });
       }
       for (const [mint, matchedBy] of mints) {
-        this.opts.sink.emit({ source: 'x', mint, kind: SignalKinds.post, observedAt, payload: { ...payload, matchedBy } });
+        this.opts.sink.emit({
+          source: 'x',
+          mint,
+          kind: SignalKinds.post,
+          observedAt,
+          payload: { ...payload, matchedBy },
+        });
       }
     }
     return tweets.records.length;

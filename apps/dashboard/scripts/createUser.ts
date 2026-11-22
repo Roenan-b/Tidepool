@@ -41,10 +41,11 @@ export function parseArgs(argv: string[]): CliArgs {
     } else if (flag === '--password' || flag?.startsWith('--password=')) {
       throw new Error('passwords are read from stdin only, never from arguments');
     } else {
-      throw new Error(`unknown argument: ${flag}`);
+      throw new Error(`unknown argument: ${String(flag)}`);
     }
   }
-  if (!username || !/^[A-Za-z0-9_.-]{1,64}$/.test(username)) throw new Error('--username is required (letters, digits, _ . -)');
+  if (!username || !/^[A-Za-z0-9_.-]{1,64}$/.test(username))
+    throw new Error('--username is required (letters, digits, _ . -)');
   if (command === 'create' && !role) throw new Error('--role is required for create');
   return { command, username, role };
 }
@@ -111,17 +112,22 @@ async function main(): Promise<void> {
         [randomUUID(), args.username, args.role, hash],
       );
       if ((r.rowCount ?? 0) === 0) throw new Error(`user ${args.username} already exists`);
-      console.log(`Created ${args.role} ${args.username}. They must enroll two-factor sign-in at first login.`);
+      console.log(`Created ${String(args.role)} ${args.username}. They must enroll two-factor sign-in at first login.`);
     } else if (args.command === 'reset-totp') {
       const r = await client.query(
         'UPDATE auth_users SET totp_secret_enc = NULL, totp_enabled = false WHERE username = $1',
         [args.username],
       );
       if ((r.rowCount ?? 0) === 0) throw new Error(`no user ${args.username}`);
-      await client.query('DELETE FROM auth_sessions WHERE user_id = (SELECT id FROM auth_users WHERE username = $1)', [args.username]);
+      await client.query('DELETE FROM auth_sessions WHERE user_id = (SELECT id FROM auth_users WHERE username = $1)', [
+        args.username,
+      ]);
       console.log(`Two-factor sign-in reset for ${args.username}; existing sessions ended.`);
     } else {
-      const r = await client.query('UPDATE auth_users SET failed_attempts = 0, locked_until = NULL WHERE username = $1', [args.username]);
+      const r = await client.query(
+        'UPDATE auth_users SET failed_attempts = 0, locked_until = NULL WHERE username = $1',
+        [args.username],
+      );
       if ((r.rowCount ?? 0) === 0) throw new Error(`no user ${args.username}`);
       console.log(`Unlocked ${args.username}.`);
     }

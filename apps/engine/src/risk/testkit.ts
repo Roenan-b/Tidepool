@@ -34,11 +34,25 @@ export function fakeMint(): string {
 export const SOL = 1_000_000_000n;
 
 /** A permissive preset; tests override the one limit they exercise. */
-export function testPreset(over: { limits?: Partial<Preset['limits']>; filters?: Partial<Preset['filters']>; strategy?: Partial<Preset['strategy']> } = {}): Preset {
+export function testPreset(
+  over: {
+    limits?: Partial<Preset['limits']>;
+    filters?: Partial<Preset['filters']>;
+    strategy?: Partial<Preset['strategy']>;
+  } = {},
+): Preset {
   const base = PRESETS.balanced;
   return {
     ...base,
-    limits: { ...base.limits, maxPositionBps: 10_000, maxOpenPositions: 10_000, maxPerTokenBps: 10_000, dailyLossLimitBps: 10_000, maxDrawdownBps: 10_000, ...over.limits },
+    limits: {
+      ...base.limits,
+      maxPositionBps: 10_000,
+      maxOpenPositions: 10_000,
+      maxPerTokenBps: 10_000,
+      dailyLossLimitBps: 10_000,
+      maxDrawdownBps: 10_000,
+      ...over.limits,
+    },
     filters: { ...base.filters, ...over.filters },
     strategy: { ...base.strategy, ...over.strategy },
   };
@@ -68,7 +82,11 @@ export function safeToken(mint: string, over: Partial<TokenSafety> = {}): TokenS
   };
 }
 
-export function candidate(mint: string, clock: Clock, over: { safety?: Partial<TokenSafety>; expiresInMs?: number; symbol?: string } = {}): Candidate {
+export function candidate(
+  mint: string,
+  clock: Clock,
+  over: { safety?: Partial<TokenSafety>; expiresInMs?: number; symbol?: string } = {},
+): Candidate {
   const now = clock.now();
   return {
     mint,
@@ -76,8 +94,17 @@ export function candidate(mint: string, clock: Clock, over: { safety?: Partial<T
     pairAddress: mint,
     score: 80,
     features: {
-      liquidityUsd: 100_000, volume5mUsd: 10_000, volumeTrend: 1.5, priceChange5mPct: 3, holderCount: 900, holderGrowth15m: 1.1,
-      mentionVelocity: 2, sentiment: 0.3, narrativeLabel: null, narrativeScore: null, boosted: false,
+      liquidityUsd: 100_000,
+      volume5mUsd: 10_000,
+      volumeTrend: 1.5,
+      priceChange5mPct: 3,
+      holderCount: 900,
+      holderGrowth15m: 1.1,
+      mentionVelocity: 2,
+      sentiment: 0.3,
+      narrativeLabel: null,
+      narrativeScore: null,
+      boosted: false,
     },
     safety: safeToken(mint, over.safety),
     reasons: ['test'],
@@ -88,7 +115,12 @@ export function candidate(mint: string, clock: Clock, over: { safety?: Partial<T
 }
 
 let seq = 0;
-export function request(mint: string, lamports: bigint, clock: Clock, over: Partial<ReservationRequest> & { safety?: Partial<TokenSafety> } = {}): ReservationRequest {
+export function request(
+  mint: string,
+  lamports: bigint,
+  clock: Clock,
+  over: Partial<ReservationRequest> & { safety?: Partial<TokenSafety> } = {},
+): ReservationRequest {
   const { safety, ...rest } = over;
   return {
     idempotencyKey: `k-${process.pid}-${++seq}-${randomBytes(4).toString('hex')}`,
@@ -116,7 +148,10 @@ export async function resetBook(pool: pg.Pool): Promise<void> {
 }
 
 export async function ledgerSum(pool: pg.Pool, mode: 'paper' | 'live'): Promise<bigint> {
-  const r = await pool.query<{ s: string }>('SELECT coalesce(sum(lamports), 0)::text AS s FROM ledger_entries WHERE mode = $1', [mode]);
+  const r = await pool.query<{ s: string }>(
+    'SELECT coalesce(sum(lamports), 0)::text AS s FROM ledger_entries WHERE mode = $1',
+    [mode],
+  );
   return BigInt(r.rows[0]!.s);
 }
 
@@ -125,7 +160,13 @@ export async function cashOf(pool: pg.Pool, mode: 'paper' | 'live'): Promise<big
   return BigInt(r.rows[0]!.c);
 }
 
-export async function stateOf(pool: pg.Pool, mode: 'paper' | 'live'): Promise<{ state: string; reason: string | null }> {
-  const r = await pool.query<{ engine_state: string; halt_reason: string | null }>('SELECT engine_state, halt_reason FROM pool_state WHERE mode = $1', [mode]);
+export async function stateOf(
+  pool: pg.Pool,
+  mode: 'paper' | 'live',
+): Promise<{ state: string; reason: string | null }> {
+  const r = await pool.query<{ engine_state: string; halt_reason: string | null }>(
+    'SELECT engine_state, halt_reason FROM pool_state WHERE mode = $1',
+    [mode],
+  );
   return { state: r.rows[0]!.engine_state, reason: r.rows[0]!.halt_reason };
 }

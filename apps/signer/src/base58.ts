@@ -3,7 +3,7 @@
  * transitive packages for parsing secret key material.
  */
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-const INDEX = new Map<string, number>([...ALPHABET].map((c, i) => [c, i]));
+const INDEX = new Map<string, number>(Array.from(ALPHABET).map((c, i) => [c, i]));
 
 export function base58Encode(bytes: Uint8Array): string {
   let zeros = 0;
@@ -22,7 +22,7 @@ export function base58Encode(bytes: Uint8Array): string {
     }
   }
   let out = '1'.repeat(zeros);
-  for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]!];
+  for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]!]!;
   return out;
 }
 

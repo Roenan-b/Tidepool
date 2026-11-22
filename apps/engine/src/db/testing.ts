@@ -20,14 +20,22 @@ export interface TestSchema {
  * Creates an isolated schema in the test database, points every pooled connection at it via the
  * libpq `options` startup parameter, and applies all migrations. Intended for vitest beforeAll.
  */
-export async function createTestSchema(opts: { url?: string; max?: number; migrationsDir?: string } = {}): Promise<TestSchema> {
+export async function createTestSchema(
+  opts: { url?: string; max?: number; migrationsDir?: string } = {},
+): Promise<TestSchema> {
   const url = opts.url ?? process.env.TEST_DATABASE_URL ?? DEFAULT_TEST_DATABASE_URL;
   const schema = `test_${randomBytes(6).toString('hex')}`;
   const admin = createPool(url, { max: 1, applicationName: 'tidepool-test-admin' });
   await admin.query(`CREATE SCHEMA ${schema}`);
   const pools: pg.Pool[] = [];
   const make = (max: number) => {
-    const p = createPool(url, { max, options: `-c search_path=${schema}`, applicationName: 'tidepool-test', connectionTimeoutMs: 120_000, statementTimeoutMs: 60_000 });
+    const p = createPool(url, {
+      max,
+      options: `-c search_path=${schema}`,
+      applicationName: 'tidepool-test',
+      connectionTimeoutMs: 120_000,
+      statementTimeoutMs: 60_000,
+    });
     pools.push(p);
     return p;
   };
@@ -50,7 +58,10 @@ export async function createTestSchema(opts: { url?: string; max?: number; migra
 }
 
 /** Runs `fn` against a fresh isolated schema and always drops it afterwards. */
-export async function withTestSchema<T>(fn: (t: TestSchema) => Promise<T>, opts?: Parameters<typeof createTestSchema>[0]): Promise<T> {
+export async function withTestSchema<T>(
+  fn: (t: TestSchema) => Promise<T>,
+  opts?: Parameters<typeof createTestSchema>[0],
+): Promise<T> {
   const t = await createTestSchema(opts);
   try {
     return await fn(t);

@@ -56,7 +56,11 @@ export function signPendingTicket(userId: string, nowMs: number, masterKey: Buff
   return `${body}.${mac}`;
 }
 
-export function verifyPendingTicket(ticket: string | undefined | null, nowMs: number, masterKey: Buffer): { userId: string } | null {
+export function verifyPendingTicket(
+  ticket: string | undefined | null,
+  nowMs: number,
+  masterKey: Buffer,
+): { userId: string } | null {
   if (typeof ticket !== 'string' || ticket.length > 256) return null;
   const parts = ticket.split('.');
   if (parts.length !== 4) return null;

@@ -14,7 +14,16 @@ const MAX_TYPE_LEN = 100;
 const MAX_REF_LEN = 300;
 const VERIFY_BATCH = 1000;
 
-interface AuditRow { seq: string; at: Date; actor: string; type: string; ref: string | null; payload: unknown; prev_hash: string; hash: string }
+interface AuditRow {
+  seq: string;
+  at: Date;
+  actor: string;
+  type: string;
+  ref: string | null;
+  payload: unknown;
+  prev_hash: string;
+  hash: string;
+}
 
 function toEvent(r: AuditRow): AuditEvent {
   return {
@@ -64,13 +73,16 @@ export class PgAuditLog implements AuditLog {
   /** Appends inside the caller's transaction. `client` must already be inside BEGIN. */
   async appendWith(client: pg.PoolClient, e: AuditInput): Promise<{ seq: number; hash: string }> {
     if (!ACTORS.has(e.actor)) throw new Error(`invalid audit actor: ${String(e.actor)}`);
-    if (typeof e.type !== 'string' || e.type.length === 0 || e.type.length > MAX_TYPE_LEN) throw new Error('invalid audit event type');
+    if (typeof e.type !== 'string' || e.type.length === 0 || e.type.length > MAX_TYPE_LEN)
+      throw new Error('invalid audit event type');
     const rawRef = e.ref ?? null;
-    if (rawRef !== null && (typeof rawRef !== 'string' || rawRef.length > MAX_REF_LEN)) throw new Error('invalid audit ref');
+    if (rawRef !== null && (typeof rawRef !== 'string' || rawRef.length > MAX_REF_LEN))
+      throw new Error('invalid audit ref');
     const type = storableString(e.type);
     const ref = rawRef === null ? null : storableString(rawRef);
     const payload = normalizeJson(e.payload ?? {});
-    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('audit payload must be an object');
+    if (payload === null || typeof payload !== 'object' || Array.isArray(payload))
+      throw new Error('audit payload must be an object');
     // Millisecond precision so the stored timestamptz round-trips to the same ISO string.
     const at = new Date((e.at ?? this.clock.now()).getTime()).toISOString();
 
@@ -111,7 +123,13 @@ export class PgAuditLog implements AuditLog {
       if (batch.rows.length === 0) break;
       for (const r of batch.rows) {
         const seq = Number(r.seq);
-        const recomputed = eventHash(r.prev_hash, { at: r.at.toISOString(), actor: r.actor, type: r.type, ref: r.ref, payload: r.payload });
+        const recomputed = eventHash(r.prev_hash, {
+          at: r.at.toISOString(),
+          actor: r.actor,
+          type: r.type,
+          ref: r.ref,
+          payload: r.payload,
+        });
         if (r.prev_hash !== expectedPrev || recomputed !== r.hash) return { ok: false, brokenAt: seq, checked };
         expectedPrev = r.hash;
         cursor = seq;
@@ -122,7 +140,9 @@ export class PgAuditLog implements AuditLog {
   }
 
   /** Most recent events first; `before` is an exclusive seq cursor for paging. */
-  async list(opts: { limit?: number; before?: number | null; ref?: string; type?: string } = {}): Promise<AuditEvent[]> {
+  async list(
+    opts: { limit?: number; before?: number | null; ref?: string; type?: string } = {},
+  ): Promise<AuditEvent[]> {
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 100), 1), 500);
     const params: unknown[] = [limit];
     const where: string[] = [];

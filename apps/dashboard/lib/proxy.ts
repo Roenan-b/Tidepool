@@ -41,13 +41,21 @@ export const PROXY_ROUTES = {
     roles: BOTH,
     query: z.object({ status: z.enum(['open', 'closed', 'all']).optional(), limit: limit(500).optional() }).strict(),
   },
-  candidates: { method: 'GET', enginePath: '/candidates', roles: OPERATOR, query: z.object({ limit: limit(200).optional() }).strict() },
+  candidates: {
+    method: 'GET',
+    enginePath: '/candidates',
+    roles: OPERATOR,
+    query: z.object({ limit: limit(200).optional() }).strict(),
+  },
   events: {
     method: 'GET',
     enginePath: '/events',
     roles: OPERATOR,
     query: z
-      .object({ limit: limit(200).optional(), beforeSeq: z.coerce.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional() })
+      .object({
+        limit: limit(200).optional(),
+        beforeSeq: z.coerce.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
+      })
       .strict(),
   },
   metrics: { method: 'GET', enginePath: '/metrics', roles: OPERATOR, query: z.object({}).strict() },
@@ -55,21 +63,38 @@ export const PROXY_ROUTES = {
     method: 'GET',
     enginePath: '/signals',
     roles: OPERATOR,
-    query: z.object({ limit: limit(500).optional(), source: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional() }).strict(),
+    query: z
+      .object({
+        limit: limit(500).optional(),
+        source: z
+          .string()
+          .regex(/^[a-z0-9_-]{1,32}$/)
+          .optional(),
+      })
+      .strict(),
   },
   start: { method: 'POST', enginePath: '/control/start', roles: BOTH, body: StartRequest.strict() },
   pause: { method: 'POST', enginePath: '/control/pause', roles: BOTH, body: EmptyBody },
   kill: { method: 'POST', enginePath: '/control/kill', roles: BOTH, body: KillRequest.strict() },
   mode: { method: 'POST', enginePath: '/control/mode', roles: BOTH, body: ModeRequest.strict() },
   clearHalt: { method: 'POST', enginePath: '/control/clear-halt', roles: OPERATOR, body: ClearHaltRequest.strict() },
-  withdrawAddress: { method: 'POST', enginePath: '/wallet/withdraw-address', roles: OWNER, body: WithdrawAddressRequest.strict() },
+  withdrawAddress: {
+    method: 'POST',
+    enginePath: '/wallet/withdraw-address',
+    roles: OWNER,
+    body: WithdrawAddressRequest.strict(),
+  },
   withdraw: {
     method: 'POST',
     enginePath: '/wallet/withdraw',
     roles: OWNER,
     // Lamport amounts are u64 on chain; anything above u64::MAX cannot be a real amount.
     body: WithdrawRequest.strict().refine(
-      (b) => typeof b.lamports === 'string' && /^\d{1,20}$/.test(b.lamports) && BigInt(b.lamports) > 0n && BigInt(b.lamports) <= U64_MAX,
+      (b) =>
+        typeof b.lamports === 'string' &&
+        /^\d{1,20}$/.test(b.lamports) &&
+        BigInt(b.lamports) > 0n &&
+        BigInt(b.lamports) <= U64_MAX,
       { message: 'Amount must be a positive number of lamports' },
     ),
   },
@@ -104,6 +129,7 @@ export function prepareProxy(
   if (!q.success) return { ok: false, status: 400, error: 'invalid_query', message: firstIssue(q.error) };
   const query = new URLSearchParams();
   for (const [k, v] of Object.entries(q.data as Record<string, unknown>)) {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- query schemas only produce primitives
     if (v !== undefined) query.set(k, String(v));
   }
 
@@ -120,7 +146,12 @@ export function prepareProxy(
         return { ok: false, status: 403, error: 'forbidden', message: 'Only the owner can switch to live trading.' };
       }
       if (m.confirm !== LIVE_MODE_CONFIRMATION) {
-        return { ok: false, status: 400, error: 'confirmation_mismatch', message: 'Type the confirmation sentence exactly to switch to live.' };
+        return {
+          ok: false,
+          status: 400,
+          error: 'confirmation_mismatch',
+          message: 'Type the confirmation sentence exactly to switch to live.',
+        };
       }
       body = { mode: 'live', confirm: m.confirm };
     } else {

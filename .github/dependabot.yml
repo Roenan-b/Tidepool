@@ -1,0 +1,63 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Phoenix
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+    labels: [dependencies]
+    groups:
+      lint-and-format:
+        patterns:
+          - 'eslint*'
+          - '@eslint/*'
+          - 'typescript-eslint'
+          - '@next/eslint-plugin-next'
+          - 'prettier'
+          - 'globals'
+          - 'husky'
+          - 'lint-staged'
+          - '@commitlint/*'
+      test:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+      types:
+        patterns:
+          - '@types/*'
+      minor-and-patch:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - '@solana/*'
+          - 'next'
+          - 'react'
+          - 'react-dom'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Phoenix
+    commit-message:
+      prefix: ci
+    labels: [dependencies, github-actions]
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+    labels: [dependencies, docker]

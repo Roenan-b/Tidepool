@@ -129,7 +129,9 @@ export class PgCandidateStore extends PgCandidateSource implements CandidateStor
           c.observedAt,
           c.expiresAt,
         );
-        values.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}::jsonb, $${b + 7}::jsonb, $${b + 8}::jsonb, $${b + 9}, $${b + 10}::timestamptz, $${b + 11}::timestamptz)`);
+        values.push(
+          `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}::jsonb, $${b + 7}::jsonb, $${b + 8}::jsonb, $${b + 9}, $${b + 10}::timestamptz, $${b + 11}::timestamptz)`,
+        );
       }
       await this.db.query(
         `INSERT INTO candidates (mint, symbol, pair_address, score, price_usd, features, safety, reasons, veto_reason, observed_at, expires_at)
@@ -193,7 +195,10 @@ export class InMemoryCandidateStore implements CandidateStore {
     return [...this.rows.values()]
       .filter((r) => r.vetoReason === null && Date.parse(r.candidate.expiresAt) > now.getTime())
       .map((r) => r.candidate)
-      .sort((a, b) => b.score - a.score || Date.parse(b.observedAt) - Date.parse(a.observedAt) || (a.mint < b.mint ? -1 : 1))
+      .sort(
+        (a, b) =>
+          b.score - a.score || Date.parse(b.observedAt) - Date.parse(a.observedAt) || (a.mint < b.mint ? -1 : 1),
+      )
       .slice(0, n)
       .map((c) => structuredClone(c));
   }

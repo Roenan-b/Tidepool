@@ -12,7 +12,7 @@ const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 export function fakeAddress(label: string, length = 44): string {
   const digest = createHash('sha256').update(`tidepool-demo:${label}`).digest();
   let out = '';
-  for (let i = 0; i < length; i++) out += B58[digest[i % digest.length]! % 58];
+  for (let i = 0; i < length; i++) out += B58[digest[i % digest.length]! % 58]!;
   return out;
 }
 
@@ -24,7 +24,20 @@ export const DEMO_DEPOSIT_ADDRESS = fakeAddress('deposit');
 const WITHDRAW_ADDRESS = fakeAddress('withdraw');
 const PENDING_WITHDRAW_ADDRESS = fakeAddress('withdraw-next');
 
-const SYMBOLS = ['PUDDLE', 'KRILL', 'BRINE', 'GULLY', 'MOSSY', 'GLOOP', 'RIPTIDE', 'BARNACLE', 'SHOAL', 'NAUTI', 'CORALZ', 'SEAFOAM'];
+const SYMBOLS = [
+  'PUDDLE',
+  'KRILL',
+  'BRINE',
+  'GULLY',
+  'MOSSY',
+  'GLOOP',
+  'RIPTIDE',
+  'BARNACLE',
+  'SHOAL',
+  'NAUTI',
+  'CORALZ',
+  'SEAFOAM',
+];
 
 function wave(now: number, periodMs: number, amplitude: number, phase = 0): number {
   return Math.sin((now / periodMs) * 2 * Math.PI + phase) * amplitude;
@@ -84,7 +97,7 @@ export function demoPositions(now = Date.now(), status: 'open' | 'closed' | 'all
     const pnl = sol(wave(now, 45_000 + i * 7000, 0.02 + i * 0.01, i));
     out.push({
       id: `demo-pos-open-${i}`,
-      mint: fakeAddress(`mint-${SYMBOLS[i]}`),
+      mint: fakeAddress(`mint-${SYMBOLS[i]!}`),
       symbol: SYMBOLS[i]!,
       strategy: 'momentum-v1',
       mode: 'paper',
@@ -106,7 +119,7 @@ export function demoPositions(now = Date.now(), status: 'open' | 'closed' | 'all
     const closedAt = now - (i + 1) * 23 * 60_000;
     out.push({
       id: `demo-pos-closed-${i}`,
-      mint: fakeAddress(`mint-${SYMBOLS[i + 3]}`),
+      mint: fakeAddress(`mint-${SYMBOLS[i + 3]!}`),
       symbol: SYMBOLS[i + 3]!,
       strategy: 'momentum-v1',
       mode: 'paper',
@@ -120,11 +133,22 @@ export function demoPositions(now = Date.now(), status: 'open' | 'closed' | 'all
       exitReason: reasons[i]!,
     });
   }
-  return status === 'all' ? out : out.filter((p) => (status === 'open' ? p.status !== 'closed' : p.status === 'closed'));
+  return status === 'all'
+    ? out
+    : out.filter((p) => (status === 'open' ? p.status !== 'closed' : p.status === 'closed'));
 }
 
 export function demoCandidates(now = Date.now()): CandidateDto[] {
-  const vetoes: Array<string | null> = [null, null, null, 'top 10 holders own 58% of supply', null, 'freeze authority not revoked', null, 'liquidity below $20,000'];
+  const vetoes: (string | null)[] = [
+    null,
+    null,
+    null,
+    'top 10 holders own 58% of supply',
+    null,
+    'freeze authority not revoked',
+    null,
+    'liquidity below $20,000',
+  ];
   return SYMBOLS.slice(0, 8).map((symbol, i) => {
     const score = Math.round((88 - i * 5.5 + wave(now, 30_000, 2, i)) * 10) / 10;
     return {
@@ -148,12 +172,45 @@ export function demoCandidates(now = Date.now()): CandidateDto[] {
   });
 }
 
-const EVENT_TYPES: Array<{ actor: string; type: string; payload: (i: number) => Record<string, unknown> }> = [
-  { actor: 'scout', type: 'candidate.scored', payload: (i) => ({ symbol: SYMBOLS[i % SYMBOLS.length], score: 70 + (i % 20), reasons: ['volume trend', 'holder growth'] }) },
-  { actor: 'risk', type: 'reservation.approved', payload: (i) => ({ symbol: SYMBOLS[i % SYMBOLS.length], lamports: (sol(0.5)).toString(), sleeve: 'momentum-v1' }) },
-  { actor: 'trader', type: 'order.filled', payload: (i) => ({ symbol: SYMBOLS[i % SYMBOLS.length], lamportsSpent: sol(0.501).toString(), slippageBps: 42 + (i % 30), paper: true }) },
-  { actor: 'risk', type: 'reservation.vetoed', payload: (i) => ({ symbol: SYMBOLS[(i + 3) % SYMBOLS.length], reason: 'top 10 holders above threshold' }) },
-  { actor: 'trader', type: 'position.closed', payload: (i) => ({ symbol: SYMBOLS[i % SYMBOLS.length], exitReason: i % 3 === 0 ? 'stop_loss' : 'take_profit', realizedPnlLamports: sol(i % 3 === 0 ? -0.04 : 0.06).toString() }) },
+const EVENT_TYPES: { actor: string; type: string; payload: (i: number) => Record<string, unknown> }[] = [
+  {
+    actor: 'scout',
+    type: 'candidate.scored',
+    payload: (i) => ({
+      symbol: SYMBOLS[i % SYMBOLS.length],
+      score: 70 + (i % 20),
+      reasons: ['volume trend', 'holder growth'],
+    }),
+  },
+  {
+    actor: 'risk',
+    type: 'reservation.approved',
+    payload: (i) => ({ symbol: SYMBOLS[i % SYMBOLS.length], lamports: sol(0.5).toString(), sleeve: 'momentum-v1' }),
+  },
+  {
+    actor: 'trader',
+    type: 'order.filled',
+    payload: (i) => ({
+      symbol: SYMBOLS[i % SYMBOLS.length],
+      lamportsSpent: sol(0.501).toString(),
+      slippageBps: 42 + (i % 30),
+      paper: true,
+    }),
+  },
+  {
+    actor: 'risk',
+    type: 'reservation.vetoed',
+    payload: (i) => ({ symbol: SYMBOLS[(i + 3) % SYMBOLS.length], reason: 'top 10 holders above threshold' }),
+  },
+  {
+    actor: 'trader',
+    type: 'position.closed',
+    payload: (i) => ({
+      symbol: SYMBOLS[i % SYMBOLS.length],
+      exitReason: i % 3 === 0 ? 'stop_loss' : 'take_profit',
+      realizedPnlLamports: sol(i % 3 === 0 ? -0.04 : 0.06).toString(),
+    }),
+  },
   { actor: 'risk', type: 'reconciliation.ok', payload: () => ({ diffLamports: '0' }) },
 ];
 

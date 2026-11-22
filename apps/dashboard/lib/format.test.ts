@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { displayText, formatLamportsUsd, formatSol, formatUsdCents, formatUsdWhole, lamportsToUsdCents, parseSolInput, shortAddress } from './format.js';
+import {
+  displayText,
+  formatLamportsUsd,
+  formatSol,
+  formatUsdCents,
+  formatUsdWhole,
+  lamportsToUsdCents,
+  parseSolInput,
+  shortAddress,
+} from './format.js';
 
 describe('formatSol', () => {
   it('formats lamports with grouping and rounding', () => {
@@ -48,7 +57,8 @@ describe('parseSolInput', () => {
     expect(parseSolInput('.5')).toBe(500_000_000n);
   });
   it('rejects bad input', () => {
-    for (const bad of ['', '.', '0', '-1', '1e3', 'abc', '0.0000000001', '1.2.3', ' ']) expect(parseSolInput(bad)).toBeNull();
+    for (const bad of ['', '.', '0', '-1', '1e3', 'abc', '0.0000000001', '1.2.3', ' '])
+      expect(parseSolInput(bad)).toBeNull();
   });
 });
 

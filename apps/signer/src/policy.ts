@@ -84,7 +84,10 @@ export interface PolicyConfig {
   allowTopLevelTokenTransfers?: boolean;
 }
 
-export type TicketForPolicy = Pick<ReservationTicket, 'intent' | 'maxLamports' | 'maxTipLamports' | 'destination' | 'mint'>;
+export type TicketForPolicy = Pick<
+  ReservationTicket,
+  'intent' | 'maxLamports' | 'maxTipLamports' | 'destination' | 'mint'
+>;
 
 export interface PolicyInput {
   /** A decoded transaction, or its wire bytes (Uint8Array) or base64 wire string. */
@@ -104,17 +107,47 @@ export interface PolicyDecision {
 }
 
 const SYSTEM_NAMES: Record<number, string> = {
-  0: 'CreateAccount', 1: 'Assign', 2: 'Transfer', 3: 'CreateAccountWithSeed', 4: 'AdvanceNonceAccount',
-  5: 'WithdrawNonceAccount', 6: 'InitializeNonceAccount', 7: 'AuthorizeNonceAccount', 8: 'Allocate',
-  9: 'AllocateWithSeed', 10: 'AssignWithSeed', 11: 'TransferWithSeed', 12: 'UpgradeNonceAccount',
+  0: 'CreateAccount',
+  1: 'Assign',
+  2: 'Transfer',
+  3: 'CreateAccountWithSeed',
+  4: 'AdvanceNonceAccount',
+  5: 'WithdrawNonceAccount',
+  6: 'InitializeNonceAccount',
+  7: 'AuthorizeNonceAccount',
+  8: 'Allocate',
+  9: 'AllocateWithSeed',
+  10: 'AssignWithSeed',
+  11: 'TransferWithSeed',
+  12: 'UpgradeNonceAccount',
 };
 
 const TOKEN_NAMES: Record<number, string> = {
-  0: 'InitializeMint', 1: 'InitializeAccount', 2: 'InitializeMultisig', 3: 'Transfer', 4: 'Approve', 5: 'Revoke',
-  6: 'SetAuthority', 7: 'MintTo', 8: 'Burn', 9: 'CloseAccount', 10: 'FreezeAccount', 11: 'ThawAccount',
-  12: 'TransferChecked', 13: 'ApproveChecked', 14: 'MintToChecked', 15: 'BurnChecked', 16: 'InitializeAccount2',
-  17: 'SyncNative', 18: 'InitializeAccount3', 19: 'InitializeMultisig2', 20: 'InitializeMint2',
-  21: 'GetAccountDataSize', 22: 'InitializeImmutableOwner', 23: 'AmountToUiAmount', 24: 'UiAmountToAmount',
+  0: 'InitializeMint',
+  1: 'InitializeAccount',
+  2: 'InitializeMultisig',
+  3: 'Transfer',
+  4: 'Approve',
+  5: 'Revoke',
+  6: 'SetAuthority',
+  7: 'MintTo',
+  8: 'Burn',
+  9: 'CloseAccount',
+  10: 'FreezeAccount',
+  11: 'ThawAccount',
+  12: 'TransferChecked',
+  13: 'ApproveChecked',
+  14: 'MintToChecked',
+  15: 'BurnChecked',
+  16: 'InitializeAccount2',
+  17: 'SyncNative',
+  18: 'InitializeAccount3',
+  19: 'InitializeMultisig2',
+  20: 'InitializeMint2',
+  21: 'GetAccountDataSize',
+  22: 'InitializeImmutableOwner',
+  23: 'AmountToUiAmount',
+  24: 'UiAmountToAmount',
 };
 
 const MAX_COMPUTE_UNITS = 1_400_000n;
@@ -151,7 +184,11 @@ function keySet(values: readonly string[]): Set<string> {
 function addressWithSeed(base: PublicKey, seed: Buffer, owner: PublicKey): PublicKey | null {
   const ownerBytes = owner.toBuffer();
   if (ownerBytes.subarray(ownerBytes.length - PDA_MARKER.length).equals(PDA_MARKER)) return null;
-  return new PublicKey(createHash('sha256').update(Buffer.concat([base.toBuffer(), seed, ownerBytes])).digest());
+  return new PublicKey(
+    createHash('sha256')
+      .update(Buffer.concat([base.toBuffer(), seed, ownerBytes]))
+      .digest(),
+  );
 }
 
 function parseAmount(label: string, value: string, reasons: string[]): bigint {
@@ -164,9 +201,15 @@ function parseAmount(label: string, value: string, reasons: string[]): bigint {
 
 export function evaluatePolicy(input: PolicyInput): PolicyDecision {
   const reasons: string[] = [];
-  const deny = (r: string): void => { reasons.push(r); };
+  const deny = (r: string): void => {
+    reasons.push(r);
+  };
   const result = (spend: bigint, tip: bigint, prio: bigint): PolicyDecision => ({
-    allow: reasons.length === 0, reasons, spendLamports: spend, tipLamports: tip, priorityFeeLamports: prio,
+    allow: reasons.length === 0,
+    reasons,
+    spendLamports: spend,
+    tipLamports: tip,
+    priorityFeeLamports: prio,
   });
 
   let message: VersionedMessage;
@@ -219,14 +262,13 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
       withdrawDestination = null;
     }
     if (!withdrawDestination) deny('withdraw ticket has no valid destination');
-    else if (!withdrawAllowlist.has(withdrawDestination)) deny(`withdraw destination ${withdrawDestination} is not on the allowlist`);
+    else if (!withdrawAllowlist.has(withdrawDestination))
+      deny(`withdraw destination ${withdrawDestination} is not on the allowlist`);
   }
 
   // Only the classic Token program owns the So111...2 native mint. The address derived for that mint
   // under Token-2022 can never be initialised as a token account, so SOL sent there would be stranded.
-  const wsolAtas = new Set<string>([
-    associatedTokenAddress(wallet, WRAPPED_SOL_MINT, TOKEN_PROGRAM_ID).toBase58(),
-  ]);
+  const wsolAtas = new Set<string>([associatedTokenAddress(wallet, WRAPPED_SOL_MINT, TOKEN_PROGRAM_ID).toBase58()]);
 
   let transferSpend = 0n;
   let rentSpend = 0n;
@@ -296,7 +338,12 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
           deny(`${where}: sell transactions may not transfer SOL except tips (to ${toB58})`);
         } else if (intent === 'buy' && wsolAtas.has(toB58)) {
           transferSpend += lamports;
-        } else if (intent === 'withdraw' && withdrawDestination !== null && toB58 === withdrawDestination && withdrawAllowlist.has(toB58)) {
+        } else if (
+          intent === 'withdraw' &&
+          withdrawDestination !== null &&
+          toB58 === withdrawDestination &&
+          withdrawAllowlist.has(toB58)
+        ) {
           transferSpend += lamports;
         } else {
           deny(`${where}: transfer to unapproved destination ${toB58}`);
@@ -348,7 +395,7 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
           return;
         }
         if (!owner.equals(TOKEN_PROGRAM_ID) && !owner.equals(TOKEN_2022_PROGRAM_ID)) {
-          deny(`${where}: ${SYSTEM_NAMES[tag]} may only create Token or Token-2022 accounts`);
+          deny(`${where}: ${String(SYSTEM_NAMES[tag])} may only create Token or Token-2022 accounts`);
           return;
         }
         if (expectedNew !== null && !created.equals(expectedNew)) {
@@ -391,7 +438,8 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
         }
         case 9: {
           const dest = account(ix, 1, 'close destination', where);
-          if (dest && !dest.equals(wallet)) deny(`${where}: CloseAccount destination ${dest.toBase58()} is not the wallet`);
+          if (dest && !dest.equals(wallet))
+            deny(`${where}: CloseAccount destination ${dest.toBase58()} is not the wallet`);
           return;
         }
         case 17: // SyncNative
@@ -432,7 +480,8 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
       const tokenProgram = account(ix, 5, 'ATA token program', where);
       if (payer && !payer.equals(wallet)) deny(`${where}: ATA payer must be the wallet`);
       if (owner && !owner.equals(wallet)) deny(`${where}: ATA owner must be the wallet`);
-      if (systemProgram && !systemProgram.equals(SYSTEM_PROGRAM_ID)) deny(`${where}: ATA system program account must be the System program`);
+      if (systemProgram && !systemProgram.equals(SYSTEM_PROGRAM_ID))
+        deny(`${where}: ATA system program account must be the System program`);
       if (tokenProgram && !tokenProgram.equals(TOKEN_PROGRAM_ID) && !tokenProgram.equals(TOKEN_2022_PROGRAM_ID)) {
         deny(`${where}: ATA token program ${tokenProgram.toBase58()} must be Token or Token-2022`);
       }
@@ -471,7 +520,8 @@ export function evaluatePolicy(input: PolicyInput): PolicyDecision {
   if (priorityFee > tipCap) deny(`priority fee ${priorityFee} exceeds cap ${tipCap}`);
   const spend = transferSpend + rentSpend;
   if (spend > ticketMax) deny(`SOL outflow ${spend} exceeds ticket maximum ${ticketMax}`);
-  if (spend > config.maxPerTxLamports) deny(`SOL outflow ${spend} exceeds per-transaction cap ${config.maxPerTxLamports}`);
+  if (spend > config.maxPerTxLamports)
+    deny(`SOL outflow ${spend} exceeds per-transaction cap ${config.maxPerTxLamports}`);
 
   return result(spend, tips, priorityFee);
 }

@@ -29,7 +29,10 @@ export class PgSignalSink implements SignalSink {
   private readonly flushIntervalMs: number;
   private readonly logger: Logger;
 
-  constructor(private readonly db: Queryable, private readonly opts: PgSignalSinkOptions = {}) {
+  constructor(
+    private readonly db: Queryable,
+    private readonly opts: PgSignalSinkOptions = {},
+  ) {
     this.maxBuffer = opts.maxBuffer ?? 5_000;
     this.batchSize = Math.max(1, Math.min(opts.batchSize ?? 100, 500));
     this.flushIntervalMs = opts.flushIntervalMs ?? 500;
@@ -95,7 +98,10 @@ export class PgSignalSink implements SignalSink {
         this.opts.metrics?.inc('signals.dropped', batch.length - keep.length);
         this.buffer.unshift(...keep);
         this.opts.metrics?.inc('signals.write_errors');
-        this.logger.warn({ err: e instanceof Error ? e.message : 'unknown', batch: batch.length }, 'signal batch insert failed');
+        this.logger.warn(
+          { err: e instanceof Error ? e.message : 'unknown', batch: batch.length },
+          'signal batch insert failed',
+        );
         return;
       }
     }
@@ -113,10 +119,19 @@ export class PgSignalSink implements SignalSink {
       }
       if (payload.length > MAX_PAYLOAD_BYTES) payload = toPgJson({ truncated: true, kind: ev.kind });
       const i = params.length;
-      params.push(pgSafeString(ev.source), ev.mint === null ? null : pgSafeString(ev.mint), pgSafeString(ev.kind), ev.observedAt.toISOString(), payload);
+      params.push(
+        pgSafeString(ev.source),
+        ev.mint === null ? null : pgSafeString(ev.mint),
+        pgSafeString(ev.kind),
+        ev.observedAt.toISOString(),
+        payload,
+      );
       rows.push(`($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}::timestamptz, $${i + 5}::jsonb)`);
     }
-    await this.db.query(`INSERT INTO signals (source, mint, kind, observed_at, payload) VALUES ${rows.join(', ')}`, params);
+    await this.db.query(
+      `INSERT INTO signals (source, mint, kind, observed_at, payload) VALUES ${rows.join(', ')}`,
+      params,
+    );
   }
 }
 

@@ -4,7 +4,8 @@ import type { PaperCostTotals } from '../trader/paperBroker.js';
 import type { MomentumParams } from '../trader/strategy.js';
 import type { ClosedTrade, DayRecord } from './memoryRisk.js';
 
-export const SYNTHETIC_LABEL = 'SYNTHETIC DATA: generated fixture, not market data. Results say nothing about real performance.';
+export const SYNTHETIC_LABEL =
+  'SYNTHETIC DATA: generated fixture, not market data. Results say nothing about real performance.';
 
 export interface DailyRow {
   date: string;
@@ -58,11 +59,26 @@ export interface BacktestReport {
   };
   daily: DailyRow[];
   lossLimitDayShare: number | null;
-  vsSol: null | { solUsdStart: number; solUsdEnd: number; holdSolReturnPct: number; strategyUsdReturnPct: number; excessPct: number };
-  trades: Array<{
-    positionId: string; mint: string; symbol: string; openedAt: string; closedAt: string; holdSeconds: number;
-    entryLamports: bigint; exitLamports: bigint; exitFailureBurnLamports: bigint; netLamports: bigint; reason: string;
-  }>;
+  vsSol: null | {
+    solUsdStart: number;
+    solUsdEnd: number;
+    holdSolReturnPct: number;
+    strategyUsdReturnPct: number;
+    excessPct: number;
+  };
+  trades: {
+    positionId: string;
+    mint: string;
+    symbol: string;
+    openedAt: string;
+    closedAt: string;
+    holdSeconds: number;
+    entryLamports: bigint;
+    exitLamports: bigint;
+    exitFailureBurnLamports: bigint;
+    netLamports: bigint;
+    reason: string;
+  }[];
 }
 
 export interface BuildReportInput {
@@ -77,7 +93,7 @@ export interface BuildReportInput {
   endingLamports: bigint;
   trades: ClosedTrade[];
   days: Map<string, DayRecord>;
-  equity: Array<{ at: number; lamports: bigint }>;
+  equity: { at: number; lamports: bigint }[];
   costs: PaperCostTotals;
   failedBuyBurnLamports: bigint;
   entryStats: BacktestReport['summary']['entries'];
@@ -104,11 +120,21 @@ export function buildReport(i: BuildReportInput): BacktestReport {
 
   const lastByDay = new Map<string, bigint>();
   for (const s of i.equity) lastByDay.set(new Date(s.at).toISOString().slice(0, 10), s.lamports);
-  const daily: DailyRow[] = [...i.days.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => {
-    const end = lastByDay.get(d.date) ?? d.sodEquity;
-    const closed = trades.filter((t) => t.closedAt.toISOString().slice(0, 10) === d.date);
-    return { date: d.date, startEquityLamports: d.sodEquity, endEquityLamports: end, netLamports: end - d.sodEquity, trades: closed.length, wins: closed.filter((t) => t.netLamports > 0n).length, lossLimitHit: d.lossLimitHit };
-  });
+  const daily: DailyRow[] = [...i.days.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d) => {
+      const end = lastByDay.get(d.date) ?? d.sodEquity;
+      const closed = trades.filter((t) => t.closedAt.toISOString().slice(0, 10) === d.date);
+      return {
+        date: d.date,
+        startEquityLamports: d.sodEquity,
+        endEquityLamports: end,
+        netLamports: end - d.sodEquity,
+        trades: closed.length,
+        wins: closed.filter((t) => t.netLamports > 0n).length,
+        lossLimitHit: d.lossLimitHit,
+      };
+    });
 
   const exitReasons: Record<string, number> = {};
   for (const t of trades) exitReasons[t.reason] = (exitReasons[t.reason] ?? 0) + 1;
@@ -118,12 +144,20 @@ export function buildReport(i: BuildReportInput): BacktestReport {
   if (i.solUsdStart && i.solUsdEnd && i.startingLamports > 0n) {
     const hold = (i.solUsdEnd / i.solUsdStart - 1) * 100;
     const strat = ((Number(i.endingLamports) * i.solUsdEnd) / (Number(i.startingLamports) * i.solUsdStart) - 1) * 100;
-    vsSol = { solUsdStart: i.solUsdStart, solUsdEnd: i.solUsdEnd, holdSolReturnPct: hold, strategyUsdReturnPct: strat, excessPct: strat - hold };
+    vsSol = {
+      solUsdStart: i.solUsdStart,
+      solUsdEnd: i.solUsdEnd,
+      holdSolReturnPct: hold,
+      strategyUsdReturnPct: strat,
+      excessPct: strat - hold,
+    };
   }
 
   return {
     synthetic: i.synthetic,
-    label: i.synthetic ? SYNTHETIC_LABEL : 'Replay of recorded data. Cost model values are estimates until measured in paper and micro-live trading.',
+    label: i.synthetic
+      ? SYNTHETIC_LABEL
+      : 'Replay of recorded data. Cost model values are estimates until measured in paper and micro-live trading.',
     preset: i.preset,
     configVersion: i.configVersion,
     params: i.params,
@@ -154,7 +188,13 @@ export function buildReport(i: BuildReportInput): BacktestReport {
       tipLamports: c.tipLamports,
       baseFeeLamports: c.baseFeeLamports,
       failedTxBurnLamports: c.failedTxBurnLamports,
-      totalLamports: c.venueFeeLamports + c.slippageLamports + c.priceImpactLamports + c.tipLamports + c.baseFeeLamports + c.failedTxBurnLamports,
+      totalLamports:
+        c.venueFeeLamports +
+        c.slippageLamports +
+        c.priceImpactLamports +
+        c.tipLamports +
+        c.baseFeeLamports +
+        c.failedTxBurnLamports,
       filledTransactions: c.fills,
       failedTransactions: c.failures,
     },
@@ -162,9 +202,17 @@ export function buildReport(i: BuildReportInput): BacktestReport {
     lossLimitDayShare: daily.length ? daily.filter((d) => d.lossLimitHit).length / daily.length : null,
     vsSol,
     trades: trades.map((t) => ({
-      positionId: t.positionId, mint: t.mint, symbol: t.symbol, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt.toISOString(),
+      positionId: t.positionId,
+      mint: t.mint,
+      symbol: t.symbol,
+      openedAt: t.openedAt.toISOString(),
+      closedAt: t.closedAt.toISOString(),
       holdSeconds: Math.round((t.closedAt.getTime() - t.openedAt.getTime()) / 1000),
-      entryLamports: t.entryLamports, exitLamports: t.exitLamports, exitFailureBurnLamports: t.exitFailureBurnLamports, netLamports: t.netLamports, reason: t.reason,
+      entryLamports: t.entryLamports,
+      exitLamports: t.exitLamports,
+      exitFailureBurnLamports: t.exitFailureBurnLamports,
+      netLamports: t.netLamports,
+      reason: t.reason,
     })),
   };
 }
@@ -193,9 +241,19 @@ export function reportToMarkdown(r: BacktestReport, title = 'Backtest report'): 
   lines.push(`| Failed buy fee burn | ${sol(s.failedBuyBurnLamports)} |`);
   lines.push(`| Net after all costs | ${sol(s.netAfterAllCostsLamports)} |`);
   lines.push(`| Max drawdown | ${sol(s.maxDrawdownLamports)} (${pct(s.maxDrawdownPct)}) |`);
-  lines.push(`| Days hitting loss limit | ${r.lossLimitDayShare === null ? 'n/a' : pct(r.lossLimitDayShare * 100, 1)} |`);
-  lines.push(`| Exit reasons | ${Object.entries(s.exitReasons).map(([k, v]) => `${k}: ${v}`).join(', ') || 'none'} |`);
-  lines.push(`| Entries (entered / vetoed / buy failed) | ${s.entries.entered} / ${s.entries.vetoed} / ${s.entries.buyFailed} |`);
+  lines.push(
+    `| Days hitting loss limit | ${r.lossLimitDayShare === null ? 'n/a' : pct(r.lossLimitDayShare * 100, 1)} |`,
+  );
+  lines.push(
+    `| Exit reasons | ${
+      Object.entries(s.exitReasons)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ') || 'none'
+    } |`,
+  );
+  lines.push(
+    `| Entries (entered / vetoed / buy failed) | ${s.entries.entered} / ${s.entries.vetoed} / ${s.entries.buyFailed} |`,
+  );
   if (s.writtenOffPositions) lines.push(`| Positions written off at end | ${s.writtenOffPositions} |`);
   lines.push('');
   lines.push('## Costs', '', '| Item | Amount |', '| --- | --- |');
@@ -206,14 +264,23 @@ export function reportToMarkdown(r: BacktestReport, title = 'Backtest report'): 
   lines.push(`| Base fees | ${sol(r.costs.baseFeeLamports)} |`);
   lines.push(`| Failed transaction burn | ${sol(r.costs.failedTxBurnLamports)} |`);
   lines.push(`| Total | ${sol(r.costs.totalLamports)} |`, '');
-  lines.push('## Daily P&L', '', '| Date | Start | End | Net | Trades | Wins | Loss limit hit |', '| --- | --- | --- | --- | --- | --- | --- |');
+  lines.push(
+    '## Daily P&L',
+    '',
+    '| Date | Start | End | Net | Trades | Wins | Loss limit hit |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+  );
   for (const d of r.daily) {
-    lines.push(`| ${d.date} | ${sol(d.startEquityLamports)} | ${sol(d.endEquityLamports)} | ${sol(d.netLamports)} | ${d.trades} | ${d.wins} | ${d.lossLimitHit ? 'yes' : 'no'} |`);
+    lines.push(
+      `| ${d.date} | ${sol(d.startEquityLamports)} | ${sol(d.endEquityLamports)} | ${sol(d.netLamports)} | ${d.trades} | ${d.wins} | ${d.lossLimitHit ? 'yes' : 'no'} |`,
+    );
   }
   lines.push('');
   lines.push('## Versus holding SOL', '');
   if (r.vsSol) {
-    lines.push(`SOL/USD ${r.vsSol.solUsdStart.toFixed(2)} to ${r.vsSol.solUsdEnd.toFixed(2)}. Holding SOL: ${pct(r.vsSol.holdSolReturnPct)}. Strategy (USD terms): ${pct(r.vsSol.strategyUsdReturnPct)}. Difference: ${pct(r.vsSol.excessPct)}.`);
+    lines.push(
+      `SOL/USD ${r.vsSol.solUsdStart.toFixed(2)} to ${r.vsSol.solUsdEnd.toFixed(2)}. Holding SOL: ${pct(r.vsSol.holdSolReturnPct)}. Strategy (USD terms): ${pct(r.vsSol.strategyUsdReturnPct)}. Difference: ${pct(r.vsSol.excessPct)}.`,
+    );
   } else {
     lines.push('No SOL price series supplied; comparison not computed.');
   }

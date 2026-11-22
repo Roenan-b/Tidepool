@@ -159,7 +159,10 @@ function readQuality(v: unknown): AccountQuality | undefined {
 }
 
 /** Per-post weights after quality weighting and near-duplicate burst discounting (same order as input). */
-export function postWeights(posts: Array<{ at: number; text: string; quality?: AccountQuality }>, cfg: Pick<FeatureConfig, 'nearDuplicateJaccard' | 'burstMinSize' | 'newAccountAgeDays'>): number[] {
+export function postWeights(
+  posts: { at: number; text: string; quality?: AccountQuality }[],
+  cfg: Pick<FeatureConfig, 'nearDuplicateJaccard' | 'burstMinSize' | 'newAccountAgeDays'>,
+): number[] {
   const order = posts.map((_, i) => i).sort((a, b) => posts[a]!.at - posts[b]!.at);
   const hashes = posts.map((p) => shingleHashes(p.text));
   const clusterOf = new Array<number>(posts.length).fill(-1);
@@ -206,7 +209,9 @@ export function computeFeatures(
 ): FeatureResult | null {
   const t = now.getTime();
   const mine = signals.filter((s) => s.mint === mint && s.observedAt.getTime() <= t);
-  const snapshots = mine.filter((s) => s.kind === SignalKinds.pairSnapshot).sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
+  const snapshots = mine
+    .filter((s) => s.kind === SignalKinds.pairSnapshot)
+    .sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
   const latest = snapshots[snapshots.length - 1];
   if (!latest || t - latest.observedAt.getTime() > cfg.maxSnapshotAgeMs) return null;
   const lp = latest.payload;
@@ -249,7 +254,9 @@ export function computeFeatures(
     }
   }
 
-  const boosted = lp.boosted === true || mine.some((s) => s.kind === SignalKinds.boost && t - s.observedAt.getTime() <= 24 * 3600_000);
+  const boosted =
+    lp.boosted === true ||
+    mine.some((s) => s.kind === SignalKinds.boost && t - s.observedAt.getTime() <= 24 * 3600_000);
 
   // Social: curated posts (quality weighted, burst discounted) plus symbol-matched aggregate metrics.
   const posts: Post[] = mine
@@ -274,7 +281,9 @@ export function computeFeatures(
     }
   });
   let mentionVelocity = mentionMass / effectiveWindowMin;
-  const aggregates = mine.filter((s) => s.kind === SignalKinds.socialMetrics).sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime());
+  const aggregates = mine
+    .filter((s) => s.kind === SignalKinds.socialMetrics)
+    .sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime());
   const agg = aggregates[0];
   if (agg) {
     const d = decayFactor(t - agg.observedAt.getTime(), cfg.socialHalfLifeMs) * cfg.aggregateSocialWeight;
@@ -289,7 +298,8 @@ export function computeFeatures(
   if (boosted) mentionVelocity *= cfg.boostedSocialFactor;
 
   const c = cfg.confirmation;
-  const onChainConfirmed = holderGrowth15m >= c.minHolderGrowth15m && volume5mUsd >= c.minVolume5mUsd && txns5m >= c.minTxns5m;
+  const onChainConfirmed =
+    holderGrowth15m >= c.minHolderGrowth15m && volume5mUsd >= c.minVolume5mUsd && txns5m >= c.minTxns5m;
   const socialSuppressed = !onChainConfirmed && (mentionVelocity > 0 || sentiment > 0);
   if (!onChainConfirmed) {
     mentionVelocity = 0;

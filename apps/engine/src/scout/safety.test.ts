@@ -28,7 +28,9 @@ const SUPPLY = 1_000_000_000n;
 
 type Acc = AccountInfo<Buffer | ParsedAccountData>;
 
-function mintAccount(o: { program?: string; mintAuthority?: string | null; freezeAuthority?: string | null; extensions?: string[] } = {}): Acc {
+function mintAccount(
+  o: { program?: string; mintAuthority?: string | null; freezeAuthority?: string | null; extensions?: string[] } = {},
+): Acc {
   const program = o.program ?? TOKEN_PROGRAM_ID;
   return {
     owner: new PublicKey(program),
@@ -59,7 +61,11 @@ function tokenAccount(owner: PublicKey): Acc {
     lamports: 1,
     executable: false,
     rentEpoch: 0,
-    data: { program: 'spl-token', space: 165, parsed: { type: 'account', info: { owner: owner.toBase58(), mint: MINT.toBase58() } } },
+    data: {
+      program: 'spl-token',
+      space: 165,
+      parsed: { type: 'account', info: { owner: owner.toBase58(), mint: MINT.toBase58() } },
+    },
   };
 }
 
@@ -81,17 +87,25 @@ function fakeRpc(accounts: Map<string, Acc>, holders: Holder[]) {
   const calls = { multiple: 0, largest: 0 };
   for (const h of holders) accounts.set(h.account.toBase58(), tokenAccount(h.owner));
   const rpc: SafetyRpc = {
-    getMultipleParsedAccounts: (async (keys: PublicKey[]) => {
+    getMultipleParsedAccounts: async (keys: PublicKey[]) => {
       calls.multiple++;
       return { context: { slot: 1 }, value: keys.map((k) => accounts.get(k.toBase58()) ?? null) };
-    }) as SafetyRpc['getMultipleParsedAccounts'],
-    getTokenLargestAccounts: (async () => {
+    },
+    getTokenLargestAccounts: async () => {
       calls.largest++;
       return {
         context: { slot: 1 },
-        value: [...holders].sort((a, b) => (b.amount > a.amount ? 1 : -1)).map((h) => ({ address: h.account, amount: h.amount.toString(), decimals: 6, uiAmount: null, uiAmountString: '' })),
+        value: [...holders]
+          .sort((a, b) => (b.amount > a.amount ? 1 : -1))
+          .map((h) => ({
+            address: h.account,
+            amount: h.amount.toString(),
+            decimals: 6,
+            uiAmount: null,
+            uiAmountString: '',
+          })),
       };
-    }) as SafetyRpc['getTokenLargestAccounts'],
+    },
   };
   return { rpc, calls };
 }
@@ -107,7 +121,12 @@ function standardHolders(): Holder[] {
 }
 
 const market = (m: Partial<MarketInfo> = {}) => ({
-  market: () => ({ liquidityUsd: 60_000, pairAddress: PAIR.toBase58(), pairCreatedAt: new Date('2026-11-22T10:00:00Z'), ...m }),
+  market: () => ({
+    liquidityUsd: 60_000,
+    pairAddress: PAIR.toBase58(),
+    pairCreatedAt: new Date('2026-11-22T10:00:00Z'),
+    ...m,
+  }),
 });
 const NOW = new Date('2026-11-22T12:00:00Z');
 
@@ -155,7 +174,9 @@ describe('OnChainSafetyChecker', () => {
   });
 
   it('reports unrevoked mint and freeze authorities, which the filters reject', async () => {
-    const accounts = new Map([[MINT.toBase58(), mintAccount({ mintAuthority: pk(5).toBase58(), freezeAuthority: pk(6).toBase58() })]]);
+    const accounts = new Map([
+      [MINT.toBase58(), mintAccount({ mintAuthority: pk(5).toBase58(), freezeAuthority: pk(6).toBase58() })],
+    ]);
     const { rpc } = fakeRpc(accounts, standardHolders());
     const s = await new OnChainSafetyChecker({ rpc, market: market(), now: () => NOW }).check(MINT.toBase58(), 0n);
     expect(s.mintAuthorityRevoked).toBe(false);
@@ -165,7 +186,15 @@ describe('OnChainSafetyChecker', () => {
   });
 
   it('lists Token-2022 extensions so banned ones are rejected', async () => {
-    const accounts = new Map([[MINT.toBase58(), mintAccount({ program: TOKEN_2022_PROGRAM_ID, extensions: ['transferHook', 'metadataPointer', 'transferHook'] })]]);
+    const accounts = new Map([
+      [
+        MINT.toBase58(),
+        mintAccount({
+          program: TOKEN_2022_PROGRAM_ID,
+          extensions: ['transferHook', 'metadataPointer', 'transferHook'],
+        }),
+      ],
+    ]);
     const { rpc } = fakeRpc(accounts, standardHolders());
     const s = await new OnChainSafetyChecker({ rpc, market: market(), now: () => NOW }).check(MINT.toBase58(), 0n);
     expect(s.token2022Extensions).toEqual(['metadataPointer', 'transferHook']);
@@ -177,15 +206,23 @@ describe('OnChainSafetyChecker', () => {
 
   it('fails closed when the mint is missing, unparsed or owned by another program', async () => {
     const empty = fakeRpc(new Map(), []);
-    await expect(new OnChainSafetyChecker({ rpc: empty.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toBeInstanceOf(SafetyCheckError);
+    await expect(
+      new OnChainSafetyChecker({ rpc: empty.rpc, market: market() }).check(MINT.toBase58(), 0n),
+    ).rejects.toBeInstanceOf(SafetyCheckError);
     const foreign = mintAccount();
     foreign.owner = pk(77);
     const f = fakeRpc(new Map([[MINT.toBase58(), foreign]]), []);
-    await expect(new OnChainSafetyChecker({ rpc: f.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(/token program/);
+    await expect(new OnChainSafetyChecker({ rpc: f.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(
+      /token program/,
+    );
     const raw: Acc = { ...mintAccount(), data: Buffer.alloc(82) };
     const r = fakeRpc(new Map([[MINT.toBase58(), raw]]), []);
-    await expect(new OnChainSafetyChecker({ rpc: r.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(/parsed/);
-    await expect(new OnChainSafetyChecker({ rpc: r.rpc, market: market() }).check('not-a-mint', 0n)).rejects.toThrow(/invalid mint/);
+    await expect(new OnChainSafetyChecker({ rpc: r.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(
+      /parsed/,
+    );
+    await expect(new OnChainSafetyChecker({ rpc: r.rpc, market: market() }).check('not-a-mint', 0n)).rejects.toThrow(
+      /invalid mint/,
+    );
   });
 
   it('fails closed when the authority fields are absent or the mint is uninitialized', async () => {
@@ -194,16 +231,28 @@ describe('OnChainSafetyChecker', () => {
     delete info.mintAuthority;
     delete info.freezeAuthority;
     const a = fakeRpc(new Map([[MINT.toBase58(), noFields]]), standardHolders());
-    await expect(new OnChainSafetyChecker({ rpc: a.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(/unexpected shape/);
+    await expect(new OnChainSafetyChecker({ rpc: a.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(
+      /unexpected shape/,
+    );
 
     const uninit = mintAccount();
     ((uninit.data as ParsedAccountData).parsed.info as Record<string, unknown>).isInitialized = false;
     const b = fakeRpc(new Map([[MINT.toBase58(), uninit]]), standardHolders());
-    await expect(new OnChainSafetyChecker({ rpc: b.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(/not initialized/);
+    await expect(new OnChainSafetyChecker({ rpc: b.rpc, market: market() }).check(MINT.toBase58(), 0n)).rejects.toThrow(
+      /not initialized/,
+    );
   });
 
   it('rejects Token-2022 extensions that are not on the vetted list (for example pausable)', async () => {
-    const accounts = new Map([[MINT.toBase58(), mintAccount({ program: TOKEN_2022_PROGRAM_ID, extensions: ['pausableConfig', 'metadataPointer', 'tokenMetadata'] })]]);
+    const accounts = new Map([
+      [
+        MINT.toBase58(),
+        mintAccount({
+          program: TOKEN_2022_PROGRAM_ID,
+          extensions: ['pausableConfig', 'metadataPointer', 'tokenMetadata'],
+        }),
+      ],
+    ]);
     const { rpc } = fakeRpc(accounts, standardHolders());
     const s = await new OnChainSafetyChecker({ rpc, market: market(), now: () => NOW }).check(MINT.toBase58(), 0n);
     const r = evaluateSafety({ ...s, sellSimulationRatio: 1 }, PRESETS.balanced.filters);
@@ -233,14 +282,27 @@ describe('OnChainSafetyChecker', () => {
       [metadataAddress(MINT).toBase58(), metadataAccount(bad)],
     ]);
     const { rpc } = fakeRpc(accounts, standardHolders());
-    const flagged = await new OnChainSafetyChecker({ rpc, market: market(), blocklist: new CreatorBlocklist([bad.toBase58()]) }).check(MINT.toBase58(), 0n);
+    const flagged = await new OnChainSafetyChecker({
+      rpc,
+      market: market(),
+      blocklist: new CreatorBlocklist([bad.toBase58()]),
+    }).check(MINT.toBase58(), 0n);
     expect(flagged.creatorFlagged).toBe(true);
 
     accounts.set(metadataAddress(MINT).toBase58(), metadataAccount(new PublicKey(PLATFORM_UPDATE_AUTHORITIES[0]!)));
-    const platform = new OnChainSafetyChecker({ rpc, market: market(), blocklist: new CreatorBlocklist([PLATFORM_UPDATE_AUTHORITIES[0]!]) });
+    const platform = new OnChainSafetyChecker({
+      rpc,
+      market: market(),
+      blocklist: new CreatorBlocklist([PLATFORM_UPDATE_AUTHORITIES[0]!]),
+    });
     expect((await platform.check(MINT.toBase58(), 0n)).creatorFlagged).toBe(false);
 
-    const hinted = new OnChainSafetyChecker({ rpc, market: market(), blocklist: new CreatorBlocklist([pk(43).toBase58()]), creatorHints: { creators: () => [pk(43).toBase58()] } });
+    const hinted = new OnChainSafetyChecker({
+      rpc,
+      market: market(),
+      blocklist: new CreatorBlocklist([pk(43).toBase58()]),
+      creatorHints: { creators: () => [pk(43).toBase58()] },
+    });
     expect((await hinted.check(MINT.toBase58(), 0n)).creatorFlagged).toBe(true);
   });
 
@@ -278,7 +340,11 @@ describe('OnChainSafetyChecker', () => {
     expect(s.sellSimulationRatio).toBeCloseTo(0.85, 9);
     expect(evaluateSafety(s, PRESETS.balanced.filters).reasons).toContain('sell_simulation_below_min');
 
-    const broken = new OnChainSafetyChecker({ rpc, market: market(), sellQuoter: { quoteSell: async () => Promise.reject(new Error('no route')) } });
+    const broken = new OnChainSafetyChecker({
+      rpc,
+      market: market(),
+      sellQuoter: { quoteSell: async () => Promise.reject(new Error('no route')) },
+    });
     const b = await broken.check(MINT.toBase58(), 100_000_000n);
     expect(b.sellSimulationRatio).toBeNull();
     expect(evaluateSafety(b, PRESETS.balanced.filters).reasons).toContain('sell_simulation_missing');
@@ -310,7 +376,9 @@ describe('CreatorBlocklist', () => {
   });
 
   it('ships an empty repository blocklist that parses', async () => {
-    const bl = await CreatorBlocklist.fromFile(new URL('../../../../data/creator-blocklist.json', import.meta.url).pathname);
+    const bl = await CreatorBlocklist.fromFile(
+      new URL('../../../../data/creator-blocklist.json', import.meta.url).pathname,
+    );
     expect(bl.size).toBe(0);
   });
 });

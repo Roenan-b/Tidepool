@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { COST_MODELS, getPreset, simulateSell } from '@tidepool/core';
 import {
-  configVersion, decideEntry, decideExit, effectiveCostModel, entryIdempotencyKey, estimateExitNetLamports, evaluateEntryQuote,
-  liquidityUsdToLamports, momentumParams, screenCandidate, sizeEntry, STRATEGY_VERSION,
+  configVersion,
+  decideEntry,
+  decideExit,
+  effectiveCostModel,
+  entryIdempotencyKey,
+  estimateExitNetLamports,
+  evaluateEntryQuote,
+  liquidityUsdToLamports,
+  momentumParams,
+  screenCandidate,
+  sizeEntry,
+  STRATEGY_VERSION,
 } from './strategy.js';
 import { makeCandidate, MINT_A, MINT_B } from './testkit.js';
 
@@ -36,7 +46,9 @@ describe('screenCandidate', () => {
 
   it('rejects a candidate expiring exactly now, accepts one expiring 1 ms later', () => {
     expect(screenCandidate(makeCandidate({ expiresAt: now.toISOString() }), now, balanced).ok).toBe(false);
-    expect(screenCandidate(makeCandidate({ expiresAt: new Date(now.getTime() + 1).toISOString() }), now, balanced).ok).toBe(true);
+    expect(
+      screenCandidate(makeCandidate({ expiresAt: new Date(now.getTime() + 1).toISOString() }), now, balanced).ok,
+    ).toBe(true);
   });
 
   it('rejects unparseable times', () => {
@@ -77,21 +89,39 @@ describe('sizeEntry', () => {
 describe('evaluateEntryQuote', () => {
   it('rejects impact at the cap and accepts just under', () => {
     expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: 2, priceLamportsPerUnit: 1 }, balanced).ok).toBe(false);
-    expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: 1.999, priceLamportsPerUnit: 1 }, balanced).ok).toBe(true);
+    expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: 1.999, priceLamportsPerUnit: 1 }, balanced).ok).toBe(
+      true,
+    );
   });
   it('rejects no route and invalid numbers', () => {
     expect(evaluateEntryQuote({ routeOk: false, priceImpactPct: 0, priceLamportsPerUnit: 1 }, balanced).ok).toBe(false);
-    expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: Number.NaN, priceLamportsPerUnit: 1 }, balanced).ok).toBe(false);
-    expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: 0.1, priceLamportsPerUnit: 0 }, balanced).ok).toBe(false);
+    expect(
+      evaluateEntryQuote({ routeOk: true, priceImpactPct: Number.NaN, priceLamportsPerUnit: 1 }, balanced).ok,
+    ).toBe(false);
+    expect(evaluateEntryQuote({ routeOk: true, priceImpactPct: 0.1, priceLamportsPerUnit: 0 }, balanced).ok).toBe(
+      false,
+    );
   });
 });
 
 describe('decideEntry', () => {
   it('combines every check and reports a reason', () => {
-    const d = decideEntry({ candidate: makeCandidate(), now, params: balanced, sizing: { equityLamports: 10n ** 10n, liquidityLamports: 10n ** 13n }, quote: { routeOk: true, priceImpactPct: 0.5, priceLamportsPerUnit: 1 } });
+    const d = decideEntry({
+      candidate: makeCandidate(),
+      now,
+      params: balanced,
+      sizing: { equityLamports: 10n ** 10n, liquidityLamports: 10n ** 13n },
+      quote: { routeOk: true, priceImpactPct: 0.5, priceLamportsPerUnit: 1 },
+    });
     expect(d.enter).toBe(true);
     expect(d.reason).toMatch(/score/);
-    const veto = decideEntry({ candidate: makeCandidate({ score: 10 }), now, params: balanced, sizing: { equityLamports: 10n ** 10n, liquidityLamports: 10n ** 13n }, quote: { routeOk: true, priceImpactPct: 0.5, priceLamportsPerUnit: 1 } });
+    const veto = decideEntry({
+      candidate: makeCandidate({ score: 10 }),
+      now,
+      params: balanced,
+      sizing: { equityLamports: 10n ** 10n, liquidityLamports: 10n ** 13n },
+      quote: { routeOk: true, priceImpactPct: 0.5, priceLamportsPerUnit: 1 },
+    });
     expect(veto).toEqual({ enter: false, reason: expect.stringMatching(/below min/) });
   });
 });
@@ -102,7 +132,10 @@ describe('decideExit', () => {
   const base = { entryLamports: entry, openedAt, now, params: balanced, killSwitch: false };
 
   it('take-profit fires exactly at +14% net and not 1 lamport below', () => {
-    expect(decideExit({ ...base, netExitLamports: 1_140_000_000n })).toMatchObject({ exit: true, reason: 'take_profit' });
+    expect(decideExit({ ...base, netExitLamports: 1_140_000_000n })).toMatchObject({
+      exit: true,
+      reason: 'take_profit',
+    });
     expect(decideExit({ ...base, netExitLamports: 1_139_999_999n }).exit).toBe(false);
   });
 
@@ -113,21 +146,32 @@ describe('decideExit', () => {
 
   it('time-stop fires at exactly timeStopSeconds, not 1 ms before', () => {
     const t = balanced.timeStopSeconds * 1000;
-    expect(decideExit({ ...base, netExitLamports: entry, openedAt: new Date(now.getTime() - t) })).toMatchObject({ exit: true, reason: 'time_stop' });
+    expect(decideExit({ ...base, netExitLamports: entry, openedAt: new Date(now.getTime() - t) })).toMatchObject({
+      exit: true,
+      reason: 'time_stop',
+    });
     expect(decideExit({ ...base, netExitLamports: entry, openedAt: new Date(now.getTime() - t + 1) }).exit).toBe(false);
   });
 
   it('kill switch takes precedence over everything', () => {
-    expect(decideExit({ ...base, netExitLamports: 2_000_000_000n, killSwitch: true })).toMatchObject({ exit: true, reason: 'kill_switch' });
+    expect(decideExit({ ...base, netExitLamports: 2_000_000_000n, killSwitch: true })).toMatchObject({
+      exit: true,
+      reason: 'kill_switch',
+    });
   });
 
   it('stop-loss takes precedence over time-stop', () => {
-    expect(decideExit({ ...base, netExitLamports: 500_000_000n, openedAt: new Date(0) })).toMatchObject({ reason: 'stop_loss' });
+    expect(decideExit({ ...base, netExitLamports: 500_000_000n, openedAt: new Date(0) })).toMatchObject({
+      reason: 'stop_loss',
+    });
   });
 
   it('without a mark only the time-stop can fire', () => {
     expect(decideExit({ ...base, netExitLamports: null }).exit).toBe(false);
-    expect(decideExit({ ...base, netExitLamports: null, openedAt: new Date(0) })).toMatchObject({ exit: true, reason: 'time_stop' });
+    expect(decideExit({ ...base, netExitLamports: null, openedAt: new Date(0) })).toMatchObject({
+      exit: true,
+      reason: 'time_stop',
+    });
   });
 
   it('accounts for exit costs: +15% gross is below +14% net after costs', () => {

@@ -22,7 +22,11 @@ export async function POST(req: NextRequest) {
       case 'invalid':
         return errorJson(401, 'invalid_credentials', INVALID);
       case 'locked':
-        return errorJson(429, 'locked', `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`);
+        return errorJson(
+          429,
+          'locked',
+          `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`,
+        );
       case 'totp_required': {
         const res = json({ next: 'totp' });
         setPendingCookie(res, r.pendingTicket);

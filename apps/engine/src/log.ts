@@ -12,11 +12,36 @@ export type { Logger } from 'pino';
 
 export const REDACTED = '[redacted]';
 
-const SENSITIVE_SUBSTRINGS = ['secret', 'passphrase', 'password', 'passwd', 'authorization', 'cookie', 'apikey', 'api_key', 'privatekey', 'private_key', 'seedphrase', 'mnemonic', 'connectionstring', 'databaseurl', 'database_url', 'dsn'];
+const SENSITIVE_SUBSTRINGS = [
+  'secret',
+  'passphrase',
+  'password',
+  'passwd',
+  'authorization',
+  'cookie',
+  'apikey',
+  'api_key',
+  'privatekey',
+  'private_key',
+  'seedphrase',
+  'mnemonic',
+  'connectionstring',
+  'databaseurl',
+  'database_url',
+  'dsn',
+];
 /** Suffixes that mark credentials. "token" is matched as a suffix only, so trading fields such as tokenAmount stay visible. */
 const SENSITIVE_SUFFIXES = ['token', 'key', 'mac'];
 /** Names ending in "key" that are identifiers, not credentials. */
-const KEY_ALLOWLIST = new Set(['idempotencykey', 'publickey', 'pubkey', 'cachekey', 'primarykey', 'sortkey', 'partitionkey']);
+const KEY_ALLOWLIST = new Set([
+  'idempotencykey',
+  'publickey',
+  'pubkey',
+  'cachekey',
+  'primarykey',
+  'sortkey',
+  'partitionkey',
+]);
 
 export function isSensitiveKey(name: string): boolean {
   const k = name.toLowerCase();
@@ -37,11 +62,14 @@ const BOT_PATH_TOKEN = /\/bot\d+:[A-Za-z0-9_-]+/g;
 /** Removes credentials embedded in URLs inside a string value. */
 export function redactString(s: string): string {
   if (!s.includes('://') && !s.includes('/bot') && !s.includes('=')) return s;
-  return s.replace(URL_USERINFO, `$1${REDACTED}@`).replace(URL_SECRET_PARAM, `$1${REDACTED}`).replace(BOT_PATH_TOKEN, `/bot${REDACTED}`);
+  return s
+    .replace(URL_USERINFO, `$1${REDACTED}@`)
+    .replace(URL_SECRET_PARAM, `$1${REDACTED}`)
+    .replace(BOT_PATH_TOKEN, `/bot${REDACTED}`);
 }
 
 /** Returns a copy of `value` with sensitive fields replaced. Bounded depth; cycles are cut. */
-export function redactDeep(value: unknown, depth = 0, seen: WeakSet<object> = new WeakSet()): unknown {
+export function redactDeep(value: unknown, depth = 0, seen = new WeakSet()): unknown {
   if (typeof value === 'string') return redactString(value);
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Error) return value; // pino's error serializer handles these
@@ -63,7 +91,16 @@ export function createLogger(opts: { level?: string; name?: string; destination?
     base: { svc: opts.name ?? 'engine' },
     // Path-based redaction for common transport shapes (fast path), plus deep key matching below.
     redact: {
-      paths: ['req.headers.authorization', 'req.headers.cookie', 'headers.authorization', 'headers["x-api-key"]', '*.token', '*.secret', '*.passphrase', '*.password'],
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'headers.authorization',
+        'headers["x-api-key"]',
+        '*.token',
+        '*.secret',
+        '*.passphrase',
+        '*.password',
+      ],
       censor: REDACTED,
     },
     formatters: {

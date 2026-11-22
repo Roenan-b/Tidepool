@@ -42,7 +42,8 @@ async function readPassphrase(confirm: boolean): Promise<string> {
   const fromEnv = process.env.SIGNER_KEYSTORE_PASSPHRASE;
   if (fromEnv) return fromEnv;
   const first = await promptHidden('Keystore passphrase: ');
-  if (first.length < MIN_PASSPHRASE_LENGTH) throw new Error(`passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
+  if (first.length < MIN_PASSPHRASE_LENGTH)
+    throw new Error(`passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
   if (confirm) {
     const second = await promptHidden('Repeat passphrase: ');
     if (second !== first) throw new Error('passphrases do not match');
@@ -118,7 +119,8 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 }
 
-const invokedDirectly = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const invokedDirectly =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirectly) {
   runCli(process.argv.slice(2)).then(
     (code) => process.exit(code),

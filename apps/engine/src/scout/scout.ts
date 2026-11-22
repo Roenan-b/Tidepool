@@ -12,7 +12,13 @@ import { computeFeatures, DEFAULT_FEATURE_CONFIG, type FeatureConfig, type Narra
 import { evaluateCooldown, evaluateSafety, FilterReasons } from './filters.js';
 import { HttpClient } from './http.js';
 import { ScoutMetrics } from './metrics.js';
-import { createNarrativeClassifier, PgNarrativeStore, type NarrativeClassifier, type NarrativeConfig, type NarrativeStore } from './narrative.js';
+import {
+  createNarrativeClassifier,
+  PgNarrativeStore,
+  type NarrativeClassifier,
+  type NarrativeConfig,
+  type NarrativeStore,
+} from './narrative.js';
 import { CreatorBlocklist, OnChainSafetyChecker, type SafetyRpc, type SellQuoter } from './safety.js';
 import { buildCandidate, DEFAULT_SCORING_CONFIG, type ScoringConfig } from './scoring.js';
 import { PgSignalSink } from './sink.js';
@@ -49,7 +55,13 @@ export const DEFAULT_CYCLE_CONFIG: ScoutCycleConfig = {
 };
 
 /** Safety failures that cannot recover soon; such mints leave the watchlist for an hour. */
-const PERMANENT_REASONS = [FilterReasons.mintAuthority, FilterReasons.freezeAuthority, FilterReasons.bannedExtension, FilterReasons.unvettedExtension, FilterReasons.creator];
+const PERMANENT_REASONS = [
+  FilterReasons.mintAuthority,
+  FilterReasons.freezeAuthority,
+  FilterReasons.bannedExtension,
+  FilterReasons.unvettedExtension,
+  FilterReasons.creator,
+];
 
 export interface ScoutOptions {
   /** Persistent sink for raw signals (normally PgSignalSink). */
@@ -132,8 +144,8 @@ export class Scout implements CandidateSource {
   }
 
   /** Watched tokens with a known symbol (from the latest pair snapshot). */
-  watchedTokens(): Array<{ mint: string; symbol: string }> {
-    const out: Array<{ mint: string; symbol: string }> = [];
+  watchedTokens(): { mint: string; symbol: string }[] {
+    const out: { mint: string; symbol: string }[] = [];
     for (const mint of this.watchlist.mints()) {
       const s = this.recent.latest(mint, SignalKinds.pairSnapshot);
       const sym = typeof s?.payload.symbol === 'string' ? s.payload.symbol : '';
@@ -180,7 +192,7 @@ export class Scout implements CandidateSource {
   private tick(): Promise<CycleReport | null> {
     if (this.cycleRunning) return this.cycleRunning;
     this.cycleRunning = this.runCycle()
-      .catch((e) => {
+      .catch((e: unknown) => {
         this.metrics.inc('cycle.errors');
         this.logger.error({ err: e instanceof Error ? e.message : 'unknown' }, 'scout cycle failed');
         return null;
@@ -215,14 +227,16 @@ export class Scout implements CandidateSource {
     // A failed cooldown lookup aborts the cycle rather than publishing tokens that may be cooling down.
     const cooldowns = await this.opts.store.activeCooldowns(mode, mints, now);
 
-    const work: Array<() => Promise<CandidateRow | null>> = [];
-    const uncached: Array<{ mint: string; task: () => Promise<CandidateRow | null> }> = [];
+    const work: (() => Promise<CandidateRow | null>)[] = [];
+    const uncached: { mint: string; task: () => Promise<CandidateRow | null> }[] = [];
 
     for (const mint of mints) {
       const fr = computeFeatures(mint, this.recent.get(mint), now, narratives.get(mint) ?? null, this.cfg.features);
       if (!fr) continue;
       const f = preset.filters;
-      const ageSeconds = fr.meta.pairCreatedAt ? Math.max(0, Math.floor((now.getTime() - fr.meta.pairCreatedAt.getTime()) / 1000)) : 0;
+      const ageSeconds = fr.meta.pairCreatedAt
+        ? Math.max(0, Math.floor((now.getTime() - fr.meta.pairCreatedAt.getTime()) / 1000))
+        : 0;
       const pre: string[] = [];
       if (fr.features.liquidityUsd < f.minLiquidityUsd) pre.push(FilterReasons.liquidity);
       if (ageSeconds < f.minAgeSeconds) pre.push(FilterReasons.tooNew);
@@ -282,7 +296,14 @@ export class Scout implements CandidateSource {
     await this.opts.store.upsertMany(rows);
     const expiredDeleted = await this.opts.store.deleteExpired(now);
     const vetoed = rows.filter((r) => r.vetoReason !== null).length;
-    const report: CycleReport = { at: now, considered: mints.length, published: rows.length - vetoed, vetoed, deferred, expiredDeleted };
+    const report: CycleReport = {
+      at: now,
+      considered: mints.length,
+      published: rows.length - vetoed,
+      vetoed,
+      deferred,
+      expiredDeleted,
+    };
     this.lastCycle = report;
     this.metrics.inc('cycle.runs');
     this.metrics.set('cycle.published', report.published);
@@ -293,7 +314,13 @@ export class Scout implements CandidateSource {
     return report;
   }
 
-  private row(mint: string, fr: NonNullable<ReturnType<typeof computeFeatures>>, safety: TokenSafety, vetoReason: string | null, extra: string[]): CandidateRow {
+  private row(
+    mint: string,
+    fr: NonNullable<ReturnType<typeof computeFeatures>>,
+    safety: TokenSafety,
+    vetoReason: string | null,
+    extra: string[],
+  ): CandidateRow {
     const { candidate } = buildCandidate({
       mint,
       features: fr.features,
@@ -321,7 +348,7 @@ export class Scout implements CandidateSource {
   }
 }
 
-async function runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
+async function runLimited<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
   const out = new Array<T>(tasks.length);
   let next = 0;
   const worker = async () => {
@@ -363,7 +390,7 @@ export function scoutConfigFromEnv(env: Record<string, string | undefined> = pro
     return Number.isFinite(v) && v >= 0 ? v : d;
   };
   const rpc = s('SOLANA_RPC_URL');
-  let rpcIsHelius = false;
+  let rpcIsHelius: boolean;
   try {
     rpcIsHelius = !!rpc && new URL(rpc).protocol === 'https:' && /(^|\.)helius-rpc\.com$/i.test(new URL(rpc).hostname);
   } catch {
@@ -373,10 +400,17 @@ export function scoutConfigFromEnv(env: Record<string, string | undefined> = pro
     dexscreenerBaseUrl: s('DEXSCREENER_BASE_URL') ?? 'https://api.dexscreener.com',
     heliusWsUrl: s('HELIUS_WS_URL'),
     heliusRpcUrl: s('HELIUS_RPC_URL') ?? (rpcIsHelius ? rpc : null),
-    streamPrograms: s('SCOUT_STREAM_PROGRAMS')?.split(',').map((p) => p.trim()).filter(Boolean) ?? null,
+    streamPrograms:
+      s('SCOUT_STREAM_PROGRAMS')
+        ?.split(',')
+        .map((p) => p.trim())
+        .filter(Boolean) ?? null,
     lunarcrushApiKey: s('LUNARCRUSH_API_KEY'),
     xBearerToken: s('X_BEARER_TOKEN'),
-    xCuratedUserIds: (s('X_CURATED_USER_IDS') ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+    xCuratedUserIds: (s('X_CURATED_USER_IDS') ?? '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean),
     xMaxReadsPerHour: n('X_MAX_READS_PER_HOUR', 200),
     narrative: {
       apiUrl: s('NARRATIVE_API_URL') ?? undefined,
@@ -426,7 +460,7 @@ export async function createScout(deps: ScoutDeps): Promise<ScoutBundle> {
   const metrics = new ScoutMetrics();
   const clock = deps.clock ?? systemClock;
   const now = () => clock.now();
-  const httpFor = (secrets: Array<string | null | undefined>) =>
+  const httpFor = (secrets: (string | null | undefined)[]) =>
     new HttpClient({ fetch: deps.fetch, secrets: secrets.filter((s): s is string => !!s) });
 
   let blocklist: CreatorBlocklist;
@@ -446,7 +480,12 @@ export async function createScout(deps: ScoutDeps): Promise<ScoutBundle> {
   const narrative = createNarrativeClassifier({
     config: cfg.narrative,
     store: narrativeStore,
-    http: new HttpClient({ fetch: deps.fetch, timeoutMs: 20_000, maxRetries: 1, secrets: cfg.narrative.apiKey ? [cfg.narrative.apiKey] : [] }),
+    http: new HttpClient({
+      fetch: deps.fetch,
+      timeoutMs: 20_000,
+      maxRetries: 1,
+      secrets: cfg.narrative.apiKey ? [cfg.narrative.apiKey] : [],
+    }),
     now,
     logger,
     metrics,
@@ -481,7 +520,15 @@ export async function createScout(deps: ScoutDeps): Promise<ScoutBundle> {
   scoutRef = scout;
 
   scout.addCollector(
-    new DexScreenerCollector({ sink: scout.sink, watched: () => scout.watchedMints(), baseUrl: cfg.dexscreenerBaseUrl, http: httpFor([]), logger, metrics, now }),
+    new DexScreenerCollector({
+      sink: scout.sink,
+      watched: () => scout.watchedMints(),
+      baseUrl: cfg.dexscreenerBaseUrl,
+      http: httpFor([]),
+      logger,
+      metrics,
+      now,
+    }),
   );
   if (cfg.heliusWsUrl) {
     scout.addCollector(
@@ -498,9 +545,20 @@ export async function createScout(deps: ScoutDeps): Promise<ScoutBundle> {
   } else {
     logger.warn({}, 'HELIUS_WS_URL not set; on-chain stream disabled');
   }
-  const holderProvider = deps.holderProvider ?? (cfg.heliusRpcUrl ? new HeliusDasHolderCounter({ rpcUrl: cfg.heliusRpcUrl, http: httpFor([]) }) : null);
+  const holderProvider =
+    deps.holderProvider ??
+    (cfg.heliusRpcUrl ? new HeliusDasHolderCounter({ rpcUrl: cfg.heliusRpcUrl, http: httpFor([]) }) : null);
   if (holderProvider) {
-    scout.addCollector(new HolderStatsCollector({ sink: scout.sink, provider: holderProvider, watched: () => scout.watchedMints(), now, logger, metrics }));
+    scout.addCollector(
+      new HolderStatsCollector({
+        sink: scout.sink,
+        provider: holderProvider,
+        watched: () => scout.watchedMints(),
+        now,
+        logger,
+        metrics,
+      }),
+    );
   } else {
     logger.warn({}, 'no holder count provider; holder growth stays 0, so social signals cannot raise scores');
   }

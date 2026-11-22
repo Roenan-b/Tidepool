@@ -20,16 +20,34 @@ describe('X helpers', () => {
 
 function xResponse(n: number) {
   return {
-    data: Array.from({ length: n }, (_, i) => ({ id: String(1000 + i), text: i === 0 ? `look at ${MINT}` : i === 1 ? 'buying $DOG' : 'gm', created_at: NOW.toISOString() })),
-    includes: { users: [{ id: '42', created_at: '2020-01-01T00:00:00Z', verified: false, public_metrics: { followers_count: 5000, following_count: 100 } }] },
+    data: Array.from({ length: n }, (_, i) => ({
+      id: String(1000 + i),
+      text: i === 0 ? `look at ${MINT}` : i === 1 ? 'buying $DOG' : 'gm',
+      created_at: NOW.toISOString(),
+    })),
+    includes: {
+      users: [
+        {
+          id: '42',
+          created_at: '2020-01-01T00:00:00Z',
+          verified: false,
+          public_metrics: { followers_count: 5000, following_count: 100 },
+        },
+      ],
+    },
     meta: { newest_id: String(1000 + n - 1), result_count: n },
   };
 }
 
 describe('XCuratedCollector', () => {
   it('stays disabled without a token or user ids', () => {
-    expect(new XCuratedCollector({ sink: new MemorySignalSink(), userIds: ['42'], maxReadsPerHour: 100 }).enabled).toBe(false);
-    expect(new XCuratedCollector({ sink: new MemorySignalSink(), bearerToken: 't', userIds: ['@bad'], maxReadsPerHour: 100 }).enabled).toBe(false);
+    expect(new XCuratedCollector({ sink: new MemorySignalSink(), userIds: ['42'], maxReadsPerHour: 100 }).enabled).toBe(
+      false,
+    );
+    expect(
+      new XCuratedCollector({ sink: new MemorySignalSink(), bearerToken: 't', userIds: ['@bad'], maxReadsPerHour: 100 })
+        .enabled,
+    ).toBe(false);
   });
 
   it('enforces the hourly read budget as a hard cap', async () => {
@@ -116,7 +134,10 @@ describe('LunarCrushCollector', () => {
     const fetch = async (url: string) => {
       calls.push(url);
       const sym = url.includes('/coins/dog/') ? 'DOG' : 'NOTCAT';
-      return new Response(JSON.stringify({ data: { symbol: sym, sentiment: 75, social_volume_24h: 2880, extra: true } }), { status: 200 });
+      return new Response(
+        JSON.stringify({ data: { symbol: sym, sentiment: 75, social_volume_24h: 2880, extra: true } }),
+        { status: 200 },
+      );
     };
     const sink = new MemorySignalSink();
     const c = new LunarCrushCollector({
@@ -148,10 +169,21 @@ describe('Holder counts', () => {
       const req = JSON.parse(String(init?.body));
       bodies.push(req);
       const page = req.params.page as number;
-      const accounts = Array.from({ length: 2 }, (_, i) => ({ owner: `o${page}-${i}`, amount: i === 0 && page === 1 ? 0 : 5 }));
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { total: 2, limit: 2, page, token_accounts: accounts } }), { status: 200 });
+      const accounts = Array.from({ length: 2 }, (_, i) => ({
+        owner: `o${page}-${i}`,
+        amount: i === 0 && page === 1 ? 0 : 5,
+      }));
+      return new Response(
+        JSON.stringify({ jsonrpc: '2.0', id: 1, result: { total: 2, limit: 2, page, token_accounts: accounts } }),
+        { status: 200 },
+      );
     };
-    const counter = new HeliusDasHolderCounter({ rpcUrl: 'https://rpc.example.com/?api-key=k', maxPages: 2, pageSize: 2, http: new HttpClient({ fetch }) });
+    const counter = new HeliusDasHolderCounter({
+      rpcUrl: 'https://rpc.example.com/?api-key=k',
+      maxPages: 2,
+      pageSize: 2,
+      http: new HttpClient({ fetch }),
+    });
     expect(await counter.holderCount(MINT)).toEqual({ count: 3, capped: true });
     expect(bodies[0]).toMatchObject({ method: 'getTokenAccounts', params: { mint: MINT, page: 1, limit: 2 } });
     expect(await counter.holderCount('bad')).toBeNull();
@@ -159,7 +191,12 @@ describe('Holder counts', () => {
 
   it('emits holder snapshots for watched mints', async () => {
     const sink = new MemorySignalSink();
-    const c = new HolderStatsCollector({ sink, provider: { holderCount: async () => ({ count: 12, capped: false }) }, watched: () => [MINT, OTHER], now: () => NOW });
+    const c = new HolderStatsCollector({
+      sink,
+      provider: { holderCount: async () => ({ count: 12, capped: false }) },
+      watched: () => [MINT, OTHER],
+      now: () => NOW,
+    });
     await c.pollOnce();
     expect(sink.events.map((e) => [e.mint, e.kind, e.payload.holderCount])).toEqual([
       [MINT, 'holder_snapshot', 12],

@@ -42,7 +42,10 @@ describe.skipIf(!dbUp)('PgAuthStore (postgres)', () => {
     await admin.end();
     pool = new pg.Pool({ connectionString: url, max: 2, options: `-c search_path=${schema}` });
     store = new PgAuthStore(pool);
-    await pool.query(`INSERT INTO auth_users (id, username, role, password_hash) VALUES ($1, 'jake', 'owner', 'scrypt$x')`, [userId]);
+    await pool.query(
+      `INSERT INTO auth_users (id, username, role, password_hash) VALUES ($1, 'jake', 'owner', 'scrypt$x')`,
+      [userId],
+    );
   });
 
   afterAll(async () => {
@@ -108,7 +111,10 @@ describe.skipIf(!dbUp)('PgAuthStore (postgres)', () => {
   it('creates, finds, expires and deletes sessions by hash', async () => {
     const now = new Date();
     const idHash = 'a'.repeat(64);
-    await store.createSession({ idHash, userId, expiresAt: new Date(now.getTime() + 3600_000), ip: '127.0.0.1', userAgent: 'test' }, now);
+    await store.createSession(
+      { idHash, userId, expiresAt: new Date(now.getTime() + 3600_000), ip: '127.0.0.1', userAgent: 'test' },
+      now,
+    );
     expect((await store.findSession(idHash, now))?.username).toBe('jake');
     expect(await store.findSession(idHash, new Date(now.getTime() + 7200_000))).toBeNull();
     await store.deleteSession(idHash);

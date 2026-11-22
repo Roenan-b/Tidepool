@@ -20,7 +20,10 @@ describe('migrations', () => {
     expect(r.rows.map((x) => x.version)).toContain('001_init');
     const sp = await db.pool.query<{ search_path: string }>('SHOW search_path');
     expect(sp.rows[0]!.search_path).toBe(db.schema);
-    const t = await db.pool.query(`SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'pool_state'`, [db.schema]);
+    const t = await db.pool.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'pool_state'`,
+      [db.schema],
+    );
     expect(t.rowCount).toBe(1);
   });
 
@@ -38,14 +41,20 @@ describe('migrations', () => {
       await writeFile(join(dir, '002_a.sql'), 'CREATE TABLE mig_a (id int);');
       await writeFile(join(dir, 'notes.txt'), 'ignored');
       expect((await listMigrations(dir)).map((m) => m.version)).toEqual(['002_a', '010_b']);
-      await withTestSchema(async (t) => {
-        await writeFile(join(dir, '011_bad.sql'), 'CREATE TABLE mig_c (id int); SELECT broken syntax here;');
-        await expect(runMigrations(t.pool, dir)).rejects.toThrow();
-        const none = await t.pool.query(`SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name IN ('mig_a','mig_c')`, [t.schema]);
-        expect(none.rowCount).toBe(0);
-        await rm(join(dir, '011_bad.sql'));
-        expect((await runMigrations(t.pool, dir)).applied).toEqual(['002_a', '010_b']);
-      }, { migrationsDir: DEFAULT_MIGRATIONS_DIR });
+      await withTestSchema(
+        async (t) => {
+          await writeFile(join(dir, '011_bad.sql'), 'CREATE TABLE mig_c (id int); SELECT broken syntax here;');
+          await expect(runMigrations(t.pool, dir)).rejects.toThrow();
+          const none = await t.pool.query(
+            `SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name IN ('mig_a','mig_c')`,
+            [t.schema],
+          );
+          expect(none.rowCount).toBe(0);
+          await rm(join(dir, '011_bad.sql'));
+          expect((await runMigrations(t.pool, dir)).applied).toEqual(['002_a', '010_b']);
+        },
+        { migrationsDir: DEFAULT_MIGRATIONS_DIR },
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

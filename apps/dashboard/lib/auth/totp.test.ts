@@ -12,7 +12,7 @@ describe('HOTP (RFC 4226 appendix D)', () => {
 });
 
 describe('TOTP (RFC 6238 appendix B, SHA-1, 8 digits)', () => {
-  const vectors: Array<[number, string]> = [
+  const vectors: [number, string][] = [
     [59, '94287082'],
     [1111111109, '07081804'],
     [1111111111, '14050471'],
@@ -31,7 +31,7 @@ describe('TOTP (RFC 6238 appendix B, SHA-1, 8 digits)', () => {
 
 describe('base32', () => {
   it('matches RFC 4648 test vectors', () => {
-    const cases: Array<[string, string]> = [
+    const cases: [string, string][] = [
       ['', ''],
       ['f', 'MY======'],
       ['fo', 'MZXQ===='],

@@ -19,12 +19,26 @@ const migration = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../
 let client: pg.Client | null = null;
 async function connect(): Promise<pg.Client | null> {
   const c = new pg.Client({ connectionString: url, connectionTimeoutMillis: 2_000 });
-  try { await c.connect(); return c; } catch { return null; }
+  try {
+    await c.connect();
+    return c;
+  } catch {
+    return null;
+  }
 }
 
 const order = (over: Partial<NewOrder> = {}): NewOrder => ({
-  id: randomUUID(), mode: 'paper', side: 'buy', mint: MINT_A, reservationId: null, positionId: null,
-  signalAt: new Date('2026-11-01T00:00:00Z'), configVersion: 'momentum-v1@1.0.0/balanced/x', lamports: 499_495_000n, tokenAmount: null, ...over,
+  id: randomUUID(),
+  mode: 'paper',
+  side: 'buy',
+  mint: MINT_A,
+  reservationId: null,
+  positionId: null,
+  signalAt: new Date('2026-11-01T00:00:00Z'),
+  configVersion: 'momentum-v1@1.0.0/balanced/x',
+  lamports: 499_495_000n,
+  tokenAmount: null,
+  ...over,
 });
 
 beforeAll(async () => {
@@ -48,9 +62,22 @@ describe('PgOrderRepository', () => {
     const o = order();
     await repo.create(o);
     await repo.markSubmitted(o.id, new Date('2026-11-01T00:00:01Z'));
-    await repo.markLanded(o.id, { at: new Date('2026-11-01T00:00:02Z'), signature: null, lamports: 500_000_000n, tokenAmount: 123_456_789_012_345_678n, feeLamports: 505_000n });
+    await repo.markLanded(o.id, {
+      at: new Date('2026-11-01T00:00:02Z'),
+      signature: null,
+      lamports: 500_000_000n,
+      tokenAmount: 123_456_789_012_345_678n,
+      feeLamports: 505_000n,
+    });
     const { rows } = await client.query('SELECT * FROM orders WHERE id = $1', [o.id]);
-    expect(rows[0]).toMatchObject({ status: 'landed', side: 'buy', mode: 'paper', lamports: '500000000', token_amount: '123456789012345678', fee_lamports: '505000' });
+    expect(rows[0]).toMatchObject({
+      status: 'landed',
+      side: 'buy',
+      mode: 'paper',
+      lamports: '500000000',
+      token_amount: '123456789012345678',
+      fee_lamports: '505000',
+    });
     expect((rows[0].signal_at as Date).toISOString()).toBe('2026-11-01T00:00:00.000Z');
     expect((rows[0].submitted_at as Date).toISOString()).toBe('2026-11-01T00:00:01.000Z');
     expect((rows[0].landed_at as Date).toISOString()).toBe('2026-11-01T00:00:02.000Z');
@@ -63,11 +90,15 @@ describe('PgOrderRepository', () => {
     await repo.create(o);
     await repo.markSubmitted(o.id, new Date());
     await repo.markFailed(o.id, { at: new Date(), error: 'x'.repeat(900), feeLamports: 505_000n });
-    const { rows } = await client.query('SELECT status, error, landed_at, fee_lamports FROM orders WHERE id = $1', [o.id]);
+    const { rows } = await client.query('SELECT status, error, landed_at, fee_lamports FROM orders WHERE id = $1', [
+      o.id,
+    ]);
     expect(rows[0].status).toBe('failed');
     expect((rows[0].error as string).length).toBe(500);
     expect(rows[0].landed_at).toBeNull();
-    await expect(repo.markLanded(o.id, { at: new Date(), signature: null, lamports: 1n, tokenAmount: null, feeLamports: 0n })).rejects.toThrow(/expected one row/);
+    await expect(
+      repo.markLanded(o.id, { at: new Date(), signature: null, lamports: 1n, tokenAmount: null, feeLamports: 0n }),
+    ).rejects.toThrow(/expected one row/);
     await expect(repo.markSubmitted(randomUUID(), new Date())).rejects.toThrow(/expected one row/);
   });
 });
@@ -80,6 +111,8 @@ describe('InMemoryOrderRepository', () => {
     await expect(repo.create(o)).rejects.toThrow();
     await repo.markSubmitted(o.id, new Date());
     await repo.markFailed(o.id, { at: new Date(), error: 'e', feeLamports: 1n });
-    await expect(repo.markLanded(o.id, { at: new Date(), signature: null, lamports: 1n, tokenAmount: null, feeLamports: 0n })).rejects.toThrow();
+    await expect(
+      repo.markLanded(o.id, { at: new Date(), signature: null, lamports: 1n, tokenAmount: null, feeLamports: 0n }),
+    ).rejects.toThrow();
   });
 });

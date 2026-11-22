@@ -5,7 +5,13 @@ import type { Preset, PresetName } from './types.js';
  * All numbers are starting points (see design doc sections 5 and 6) to be tuned with paper-trading data.
  */
 const commonFilters = {
-  bannedToken2022Extensions: ['transferFeeConfig', 'transferHook', 'permanentDelegate', 'nonTransferable', 'defaultAccountState'],
+  bannedToken2022Extensions: [
+    'transferFeeConfig',
+    'transferHook',
+    'permanentDelegate',
+    'nonTransferable',
+    'defaultAccountState',
+  ],
   minSellSimulationRatio: 0.9,
 };
 
@@ -15,11 +21,11 @@ export const PRESETS: Record<PresetName, Preset> = {
     label: 'Conservative',
     description: 'Small positions, graduated tokens with deep liquidity, tight daily loss limit.',
     limits: {
-      maxPositionBps: 300,      // 3% of pool per position
+      maxPositionBps: 300, // 3% of pool per position
       maxOpenPositions: 3,
       maxPerTokenBps: 300,
-      dailyLossLimitBps: 300,   // 3% of start-of-day equity
-      maxDrawdownBps: 1500,     // 15% from peak
+      dailyLossLimitBps: 300, // 3% of start-of-day equity
+      maxDrawdownBps: 1500, // 15% from peak
       feeReserveLamports: 100_000_000n, // 0.1 SOL
     },
     filters: {

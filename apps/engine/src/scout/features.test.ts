@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { accountQualityWeight, computeFeatures, decayFactor, DEFAULT_FEATURE_CONFIG, jaccard, postWeights, shingleHashes } from './features.js';
+import {
+  accountQualityWeight,
+  computeFeatures,
+  decayFactor,
+  DEFAULT_FEATURE_CONFIG,
+  jaccard,
+  postWeights,
+  shingleHashes,
+} from './features.js';
 import { scoreFeatures } from './scoring.js';
 import type { SignalEvent } from './types.js';
 
@@ -32,9 +40,19 @@ function snapshot(at: Date, o: Record<string, unknown> = {}): SignalEvent {
   };
 }
 
-const holders = (at: Date, n: number): SignalEvent => ({ source: 'holders', mint: MINT, kind: 'holder_snapshot', observedAt: at, payload: { holderCount: n } });
+const holders = (at: Date, n: number): SignalEvent => ({
+  source: 'holders',
+  mint: MINT,
+  kind: 'holder_snapshot',
+  observedAt: at,
+  payload: { holderCount: n },
+});
 
-const post = (at: Date, text: string, quality: Record<string, unknown> = { accountAgeDays: 900, followers: 5_000, following: 300 }): SignalEvent => ({
+const post = (
+  at: Date,
+  text: string,
+  quality: Record<string, unknown> = { accountAgeDays: 900, followers: 5_000, following: 300 },
+): SignalEvent => ({
   source: 'x',
   mint: MINT,
   kind: 'post',
@@ -83,14 +101,26 @@ describe('computeFeatures', () => {
   });
 
   it('decays social mentions with time', () => {
-    const fresh = computeFeatures(MINT, [...confirmed(), post(ago(0), 'first unique post about the token')], NOW, null)!;
-    const old = computeFeatures(MINT, [...confirmed(), post(ago(20 * MIN), 'first unique post about the token')], NOW, null)!;
+    const fresh = computeFeatures(
+      MINT,
+      [...confirmed(), post(ago(0), 'first unique post about the token')],
+      NOW,
+      null,
+    )!;
+    const old = computeFeatures(
+      MINT,
+      [...confirmed(), post(ago(20 * MIN), 'first unique post about the token')],
+      NOW,
+      null,
+    )!;
     expect(old.features.mentionVelocity).toBeCloseTo(fresh.features.mentionVelocity * 0.25, 4);
   });
 
   it('discounts bursts of near-identical posts from new accounts', () => {
     const newAcct = { accountAgeDays: 3, followers: 20, following: 500 };
-    const burst = Array.from({ length: 6 }, (_, i) => post(ago(i * 1000), `$DOG to the moon now buy buy buy ${i % 2 ? '!!' : ''}`, newAcct));
+    const burst = Array.from({ length: 6 }, (_, i) =>
+      post(ago(i * 1000), `$DOG to the moon now buy buy buy ${i % 2 ? '!!' : ''}`, newAcct),
+    );
     const organic = [
       'Liquidity migrated cleanly and holders keep spreading',
       'Volume on the AMM is up and the dev wallet is empty',
@@ -112,7 +142,13 @@ describe('computeFeatures', () => {
   it('marks boosted listings and halves their social weight', () => {
     const posts = [post(ago(0), 'a genuinely distinct observation about the pool')];
     const plain = computeFeatures(MINT, [...confirmed(), ...posts], NOW, null)!;
-    const boost: SignalEvent = { source: 'dexscreener', mint: MINT, kind: 'boost', observedAt: ago(5 * MIN), payload: { boosted: true } };
+    const boost: SignalEvent = {
+      source: 'dexscreener',
+      mint: MINT,
+      kind: 'boost',
+      observedAt: ago(5 * MIN),
+      payload: { boosted: true },
+    };
     const boosted = computeFeatures(MINT, [...confirmed(), ...posts, boost], NOW, null)!;
     expect(boosted.features.boosted).toBe(true);
     expect(boosted.features.mentionVelocity).toBeCloseTo(plain.features.mentionVelocity / 2, 3);
@@ -123,8 +159,16 @@ describe('computeFeatures', () => {
 
   it('does not let social activity raise the score without on-chain confirmation', () => {
     const unconfirmed = [holders(ago(16 * MIN), 1000), holders(ago(1_000), 1000), snapshot(ago(2_000))];
-    const hype = Array.from({ length: 20 }, (_, i) => post(ago(i * 1000), `distinct analysis number ${i} with different words ${'x'.repeat(i)}`));
-    const lunar: SignalEvent = { source: 'lunarcrush', mint: MINT, kind: 'social_metrics', observedAt: ago(0), payload: { mentionsPerMinute: 50, sentiment: 0.9 } };
+    const hype = Array.from({ length: 20 }, (_, i) =>
+      post(ago(i * 1000), `distinct analysis number ${i} with different words ${'x'.repeat(i)}`),
+    );
+    const lunar: SignalEvent = {
+      source: 'lunarcrush',
+      mint: MINT,
+      kind: 'social_metrics',
+      observedAt: ago(0),
+      payload: { mentionsPerMinute: 50, sentiment: 0.9 },
+    };
     const quiet = computeFeatures(MINT, unconfirmed, NOW, null)!;
     const loud = computeFeatures(MINT, [...unconfirmed, ...hype, lunar], NOW, null)!;
     expect(loud.meta.onChainConfirmed).toBe(false);
@@ -140,12 +184,20 @@ describe('computeFeatures', () => {
     // The same social input does raise the score once the token is confirmed on-chain.
     const c = computeFeatures(MINT, [...confirmed(), ...hype, lunar], NOW, narrative)!;
     const cBase = computeFeatures(MINT, confirmed(), NOW, null)!;
-    expect(scoreFeatures({ features: c.features, onChainConfirmed: true }).score).toBeGreaterThan(scoreFeatures({ features: cBase.features, onChainConfirmed: true }).score);
+    expect(scoreFeatures({ features: c.features, onChainConfirmed: true }).score).toBeGreaterThan(
+      scoreFeatures({ features: cBase.features, onChainConfirmed: true }).score,
+    );
   });
 
   it('still applies negative sentiment without confirmation', () => {
     const unconfirmed = [snapshot(ago(2_000), { volume5mUsd: 100, buys5m: 1, sells5m: 1 })];
-    const lunar: SignalEvent = { source: 'lunarcrush', mint: MINT, kind: 'social_metrics', observedAt: ago(0), payload: { mentionsPerMinute: 5, sentiment: -0.8 } };
+    const lunar: SignalEvent = {
+      source: 'lunarcrush',
+      mint: MINT,
+      kind: 'social_metrics',
+      observedAt: ago(0),
+      payload: { mentionsPerMinute: 5, sentiment: -0.8 },
+    };
     expect(computeFeatures(MINT, [...unconfirmed, lunar], NOW, null)!.features.sentiment).toBeCloseTo(-0.8);
   });
 

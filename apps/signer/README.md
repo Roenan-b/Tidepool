@@ -8,15 +8,15 @@ RPC node, and never returns or logs key material.
 
 ## Threat model
 
-| Asset | Threat | Control in the signer |
-| --- | --- | --- |
-| Hot wallet key | Theft from disk, backups or repo | Key encrypted at rest (scrypt + AES-256-GCM), file mode 0600 enforced, keystore and state ignored by git |
-| Hot wallet key | Leak through logs, errors or HTTP responses | Only the public key is ever printed or returned; logs are JSON lines with decisions, ids and amounts only |
-| Pool funds | Compromised or buggy engine asks for arbitrary transactions | Deny-by-default policy over the compiled message; only known programs and instructions; SOL may move only to tip accounts, the wallet's own wrapped SOL account (buys) or the allowlisted withdrawal address |
-| Pool funds | Runaway spending (bug or compromise with valid tickets) | Per-transaction cap, per-ticket cap, tip cap, priority fee cap, per-UTC-day cap persisted across restarts |
-| Pool funds | Ticket replay | Each reservationId is signed at most once; used ids persist until 15 minutes after the ticket expires (tolerates a backward clock step); ticket lifetime is bounded |
-| Pool funds | Delayed replay of a signed transaction | Durable nonce instructions are denied, so every signed transaction expires with its recent blockhash |
-| Signer API | Network exposure | Binds loopback only unless `SIGNER_ALLOW_NON_LOOPBACK=true`; Host header must be loopback (blocks DNS rebinding); bearer token compared in constant time; 64 KB body limit; strict schemas |
+| Asset          | Threat                                                      | Control in the signer                                                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hot wallet key | Theft from disk, backups or repo                            | Key encrypted at rest (scrypt + AES-256-GCM), file mode 0600 enforced, keystore and state ignored by git                                                                                                     |
+| Hot wallet key | Leak through logs, errors or HTTP responses                 | Only the public key is ever printed or returned; logs are JSON lines with decisions, ids and amounts only                                                                                                    |
+| Pool funds     | Compromised or buggy engine asks for arbitrary transactions | Deny-by-default policy over the compiled message; only known programs and instructions; SOL may move only to tip accounts, the wallet's own wrapped SOL account (buys) or the allowlisted withdrawal address |
+| Pool funds     | Runaway spending (bug or compromise with valid tickets)     | Per-transaction cap, per-ticket cap, tip cap, priority fee cap, per-UTC-day cap persisted across restarts                                                                                                    |
+| Pool funds     | Ticket replay                                               | Each reservationId is signed at most once; used ids persist until 15 minutes after the ticket expires (tolerates a backward clock step); ticket lifetime is bounded                                          |
+| Pool funds     | Delayed replay of a signed transaction                      | Durable nonce instructions are denied, so every signed transaction expires with its recent blockhash                                                                                                         |
+| Signer API     | Network exposure                                            | Binds loopback only unless `SIGNER_ALLOW_NON_LOOPBACK=true`; Host header must be loopback (blocks DNS rebinding); bearer token compared in constant time; 64 KB body limit; strict schemas                   |
 
 Trust boundaries: the engine is untrusted input. The ticket MAC proves that the Risk Officer
 approved a reservation, but the engine process holds the same HMAC secret, so a fully compromised
@@ -58,21 +58,21 @@ npm run signer            # from the repo root, or: npm run start -w @tidepool/s
 
 Configuration (environment, validated at start; the process exits on any invalid value):
 
-| Variable | Meaning |
-| --- | --- |
-| `SIGNER_HOST`, `SIGNER_PORT` | Listen address, default `127.0.0.1:7071`. Non-loopback hosts need `SIGNER_ALLOW_NON_LOOPBACK=true` |
-| `SIGNER_API_TOKEN` | Bearer token the engine sends (at least 32 characters, different from the ticket secret) |
-| `RESERVATION_TICKET_SECRET` | HMAC secret shared with the Risk Officer (at least 32 characters) |
+| Variable                                             | Meaning                                                                                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SIGNER_HOST`, `SIGNER_PORT`                         | Listen address, default `127.0.0.1:7071`. Non-loopback hosts need `SIGNER_ALLOW_NON_LOOPBACK=true`                                                                            |
+| `SIGNER_API_TOKEN`                                   | Bearer token the engine sends (at least 32 characters, different from the ticket secret)                                                                                      |
+| `RESERVATION_TICKET_SECRET`                          | HMAC secret shared with the Risk Officer (at least 32 characters)                                                                                                             |
 | `SIGNER_KEYSTORE_PATH`, `SIGNER_KEYSTORE_PASSPHRASE` | Keystore file and passphrase. The passphrase is removed from `process.env` after it is read (the kernel copy in `/proc/<pid>/environ` remains; prefer the interactive prompt) |
-| `SIGNER_STATE_PATH` | Replay and daily spend state (JSON, mode 0600, atomic writes) |
-| `SIGNER_MAX_PER_TX_LAMPORTS` | Cap on non-tip SOL outflow per transaction |
-| `SIGNER_MAX_PER_DAY_LAMPORTS` | Cap on outflow plus tips plus priority fees per UTC day |
-| `SIGNER_MAX_TIP_LAMPORTS` | Cap on tips per transaction, and separately on the priority fee |
-| `SIGNER_WITHDRAW_ALLOWLIST` | Comma-separated wallet addresses withdrawals may go to (must be on-curve wallet addresses) |
-| `SIGNER_TIP_ACCOUNTS` | Comma-separated Jito / Sender tip accounts. Copy them from the provider's documentation. Empty means tips are denied |
-| `SIGNER_EXTRA_PROGRAM_IDS` | Optional extra program ids to allow (opaque, not parsed) |
-| `SIGNER_ALLOW_TOP_LEVEL_TOKEN_TRANSFERS` | `true` to allow top-level SPL Transfer / TransferChecked (default `false`) |
-| `SIGNER_MAX_TICKET_TTL_MS` | Longest remaining ticket lifetime accepted, default 300000 |
+| `SIGNER_STATE_PATH`                                  | Replay and daily spend state (JSON, mode 0600, atomic writes)                                                                                                                 |
+| `SIGNER_MAX_PER_TX_LAMPORTS`                         | Cap on non-tip SOL outflow per transaction                                                                                                                                    |
+| `SIGNER_MAX_PER_DAY_LAMPORTS`                        | Cap on outflow plus tips plus priority fees per UTC day                                                                                                                       |
+| `SIGNER_MAX_TIP_LAMPORTS`                            | Cap on tips per transaction, and separately on the priority fee                                                                                                               |
+| `SIGNER_WITHDRAW_ALLOWLIST`                          | Comma-separated wallet addresses withdrawals may go to (must be on-curve wallet addresses)                                                                                    |
+| `SIGNER_TIP_ACCOUNTS`                                | Comma-separated Jito / Sender tip accounts. Copy them from the provider's documentation. Empty means tips are denied                                                          |
+| `SIGNER_EXTRA_PROGRAM_IDS`                           | Optional extra program ids to allow (opaque, not parsed)                                                                                                                      |
+| `SIGNER_ALLOW_TOP_LEVEL_TOKEN_TRANSFERS`             | `true` to allow top-level SPL Transfer / TransferChecked (default `false`)                                                                                                    |
+| `SIGNER_MAX_TICKET_TTL_MS`                           | Longest remaining ticket lifetime accepted, default 300000                                                                                                                    |
 
 Run the signer as its own OS user, with the keystore directory owned by that user and mode 0700.
 
@@ -83,16 +83,36 @@ Run the signer as its own OS user, with the keystore directory owned by that use
 `POST /sign` with `Authorization: Bearer <SIGNER_API_TOKEN>` and `Content-Type: application/json`:
 
 ```json
-{ "ticket": { "ticket": { "v": 1, "reservationId": "...", "intent": "buy", "mint": "...", "maxLamports": "100000000",
-  "maxTipLamports": "1000000", "destination": null, "issuedAt": 0, "expiresAt": 0 }, "mac": "<64 hex>" },
-  "transactionBase64": "<unsigned wire transaction, legacy or v0>" }
+{
+  "ticket": {
+    "ticket": {
+      "v": 1,
+      "reservationId": "...",
+      "intent": "buy",
+      "mint": "...",
+      "maxLamports": "100000000",
+      "maxTipLamports": "1000000",
+      "destination": null,
+      "issuedAt": 0,
+      "expiresAt": 0
+    },
+    "mac": "<64 hex>"
+  },
+  "transactionBase64": "<unsigned wire transaction, legacy or v0>"
+}
 ```
 
 Success (200):
 
 ```json
-{ "signedTransactionBase64": "...", "signature": "<base58>", "spendLamports": "100000000",
-  "tipLamports": "1000000", "priorityFeeLamports": "200", "dailySpentLamports": "101000200" }
+{
+  "signedTransactionBase64": "...",
+  "signature": "<base58>",
+  "spendLamports": "100000000",
+  "tipLamports": "1000000",
+  "priorityFeeLamports": "200",
+  "dailySpentLamports": "101000200"
+}
 ```
 
 Errors: 400 malformed JSON, schema violation or undecodable transaction; 401 bad token;

@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Keypair } from '@solana/web3.js';
-import { verifyTicket, type SignedTicket } from '@tidepool/core/ticket';
+import { verifyTicket } from '@tidepool/core/ticket';
 import { z } from 'zod';
 import { base58Encode } from './base58.js';
 import { isLoopbackHost, type SignerConfig } from './config.js';
@@ -26,22 +26,30 @@ export const MAX_BODY_BYTES = 64 * 1024;
 const decimal = z.string().regex(/^\d{1,20}$/);
 const base58Key = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
 
-const TicketSchema = z.object({
-  v: z.literal(1),
-  reservationId: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),
-  intent: z.enum(['buy', 'sell', 'withdraw']),
-  mint: base58Key.nullable(),
-  maxLamports: decimal,
-  maxTipLamports: decimal,
-  destination: base58Key.nullable(),
-  issuedAt: z.number().int().nonnegative(),
-  expiresAt: z.number().int().nonnegative(),
-}).strict();
+const TicketSchema = z
+  .object({
+    v: z.literal(1),
+    reservationId: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),
+    intent: z.enum(['buy', 'sell', 'withdraw']),
+    mint: base58Key.nullable(),
+    maxLamports: decimal,
+    maxTipLamports: decimal,
+    destination: base58Key.nullable(),
+    issuedAt: z.number().int().nonnegative(),
+    expiresAt: z.number().int().nonnegative(),
+  })
+  .strict();
 
-export const SignRequestSchema = z.object({
-  ticket: z.object({ ticket: TicketSchema, mac: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
-  transactionBase64: z.string().min(4).max(2048).regex(/^[A-Za-z0-9+/]+={0,2}$/),
-}).strict();
+export const SignRequestSchema = z
+  .object({
+    ticket: z.object({ ticket: TicketSchema, mac: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
+    transactionBase64: z
+      .string()
+      .min(4)
+      .max(2048)
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/),
+  })
+  .strict();
 
 export type SignRequest = z.infer<typeof SignRequestSchema>;
 
@@ -62,7 +70,17 @@ export const jsonLineLogger: Logger = (record) => {
 };
 
 export interface SignerServerOptions {
-  config: Pick<SignerConfig, 'host' | 'port' | 'apiToken' | 'ticketSecret' | 'maxPerDayLamports' | 'maxTicketTtlMs' | 'allowNonLoopback' | 'policy'>;
+  config: Pick<
+    SignerConfig,
+    | 'host'
+    | 'port'
+    | 'apiToken'
+    | 'ticketSecret'
+    | 'maxPerDayLamports'
+    | 'maxTicketTtlMs'
+    | 'allowNonLoopback'
+    | 'policy'
+  >;
   keypair: Keypair;
   state: SignerStateStore;
   logger?: Logger;
@@ -76,7 +94,11 @@ export interface SignerServer {
 }
 
 class HttpError extends Error {
-  constructor(readonly status: number, readonly body: Record<string, unknown>) {
+  constructor(
+    readonly status: number,
+    readonly body: Record<string, unknown>,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string -- error field from an untrusted response body
     super(String(body.error ?? 'error'));
   }
 }
@@ -174,7 +196,7 @@ export function createSignerServer(opts: SignerServerOptions): SignerServer {
   };
 
   const signOnce = (request: SignRequest): SignResponse => {
-    const signed = request.ticket as SignedTicket;
+    const signed = request.ticket;
     const t = signed.ticket;
     const nowMs = now();
     const base = { reservationId: t.reservationId, intent: t.intent };
@@ -262,7 +284,8 @@ export function createSignerServer(opts: SignerServerOptions): SignerServer {
       throw new HttpError(401, { error: 'unauthorized' });
     }
     const ctype = req.headers['content-type'] ?? '';
-    if (!/^application\/json(\s*;|$)/i.test(ctype)) throw new HttpError(415, { error: 'content-type must be application/json' });
+    if (!/^application\/json(\s*;|$)/i.test(ctype))
+      throw new HttpError(415, { error: 'content-type must be application/json' });
 
     const body = await readBody(req, MAX_BODY_BYTES);
     let json: unknown;
@@ -273,7 +296,10 @@ export function createSignerServer(opts: SignerServerOptions): SignerServer {
     }
     const parsed = SignRequestSchema.safeParse(json);
     if (!parsed.success) {
-      throw new HttpError(400, { error: 'invalid request', issues: parsed.error.issues.slice(0, 10).map((i) => `${i.path.join('.')}: ${i.message}`) });
+      throw new HttpError(400, {
+        error: 'invalid request',
+        issues: parsed.error.issues.slice(0, 10).map((i) => `${i.path.join('.')}: ${i.message}`),
+      });
     }
     const response = await exclusive(() => signOnce(parsed.data));
     send(res, 200, response);

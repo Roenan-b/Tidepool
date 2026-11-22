@@ -20,7 +20,10 @@ export class RecentSignalStore implements MarketInfoProvider, CreatorHintProvide
   private readonly maxEvents: number;
   private readonly retentionMs: number;
 
-  constructor(opts: RecentSignalStoreOptions = {}, private readonly now: () => number = Date.now) {
+  constructor(
+    opts: RecentSignalStoreOptions = {},
+    private readonly now: () => number = Date.now,
+  ) {
     this.byMint = new LruMap(opts.maxMints ?? 2_000);
     this.maxEvents = opts.maxEventsPerMint ?? 600;
     this.retentionMs = opts.retentionMs ?? 45 * 60_000;
@@ -53,7 +56,8 @@ export class RecentSignalStore implements MarketInfoProvider, CreatorHintProvide
     const s = this.latest(mint, SignalKinds.pairSnapshot);
     if (!s) return null;
     const created = toFiniteNumber(s.payload.pairCreatedAt);
-    const pair = typeof s.payload.pairAddress === 'string' && isMintAddress(s.payload.pairAddress) ? s.payload.pairAddress : null;
+    const pair =
+      typeof s.payload.pairAddress === 'string' && isMintAddress(s.payload.pairAddress) ? s.payload.pairAddress : null;
     return {
       liquidityUsd: Math.max(0, toFiniteNumber(s.payload.liquidityUsd) ?? 0),
       pairAddress: pair,
@@ -154,7 +158,7 @@ export class Watchlist {
    */
   promoteMature(minAgeMs: number, limit = 100): number {
     const cutoff = this.now() - Math.max(0, minAgeMs);
-    const ready: Array<[string, { addedAt: number; via: string }]> = [];
+    const ready: [string, { addedAt: number; via: string }][] = [];
     for (const [mint, entry] of this.maturing.entries()) {
       if (ready.length >= limit) break;
       if (entry.addedAt <= cutoff) ready.push([mint, entry]);

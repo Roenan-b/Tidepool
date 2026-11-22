@@ -22,7 +22,16 @@ export interface PaperCostTotals {
 }
 
 export function emptyCostTotals(): PaperCostTotals {
-  return { venueFeeLamports: 0n, slippageLamports: 0n, priceImpactLamports: 0n, tipLamports: 0n, baseFeeLamports: 0n, failedTxBurnLamports: 0n, fills: 0, failures: 0 };
+  return {
+    venueFeeLamports: 0n,
+    slippageLamports: 0n,
+    priceImpactLamports: 0n,
+    tipLamports: 0n,
+    baseFeeLamports: 0n,
+    failedTxBurnLamports: 0n,
+    fills: 0,
+    failures: 0,
+  };
 }
 
 export interface PaperBrokerOptions {
@@ -59,7 +68,8 @@ export class PaperBroker implements Broker {
     this.quotes = opts.quotes;
     this.models = opts.costModels ?? COST_MODELS;
     this.defaultVenue = opts.defaultVenue ?? 'graduated';
-    if (opts.failureRate !== undefined && !(opts.failureRate >= 0 && opts.failureRate <= 1)) throw new RangeError('failureRate must be in [0, 1]');
+    if (opts.failureRate !== undefined && !(opts.failureRate >= 0 && opts.failureRate <= 1))
+      throw new RangeError('failureRate must be in [0, 1]');
     this.failureRate = opts.failureRate;
     this.rng = opts.rng ?? createRng(opts.seed ?? 1);
     this.maxVenueCache = opts.maxVenueCache ?? 10_000;
@@ -91,9 +101,13 @@ export class PaperBroker implements Broker {
   }
 
   /** Returns a failure if the simulated transaction does not land, booking the burned fee. */
-  private maybeFail(m: CostModel, allowedSlippageBps: number): { ok: false; error: string; burnedFeeLamports: bigint } | null {
+  private maybeFail(
+    m: CostModel,
+    allowedSlippageBps: number,
+  ): { ok: false; error: string; burnedFeeLamports: bigint } | null {
     let error: string | null = null;
-    if (m.slippageBps > allowedSlippageBps) error = `paper: expected slippage ${m.slippageBps} bps exceeds limit ${allowedSlippageBps} bps`;
+    if (m.slippageBps > allowedSlippageBps)
+      error = `paper: expected slippage ${m.slippageBps} bps exceeds limit ${allowedSlippageBps} bps`;
     // Draw on every call so the sequence of random numbers does not depend on the slippage branch.
     const roll = this.rng();
     if (!error && roll < m.failureRate) error = 'paper: simulated transaction failure';
@@ -110,7 +124,13 @@ export class PaperBroker implements Broker {
     this.costs.fills += 1;
   }
 
-  async buy(args: { mint: string; lamportsIn: bigint; slippageBps: number; tipLamports: bigint; ticket: SignedTicket | null }): Promise<BuyResult> {
+  async buy(args: {
+    mint: string;
+    lamportsIn: bigint;
+    slippageBps: number;
+    tipLamports: bigint;
+    ticket: SignedTicket | null;
+  }): Promise<BuyResult> {
     if (args.lamportsIn <= 0n) return { ok: false, error: 'lamportsIn must be positive', burnedFeeLamports: 0n };
     if (args.tipLamports < 0n) return { ok: false, error: 'tip must be non-negative', burnedFeeLamports: 0n };
     let q: QuoteResult;
@@ -139,7 +159,13 @@ export class PaperBroker implements Broker {
     return { ok: true, lamportsSpent: fill.lamportsSpent, tokenAmount: fill.tokenAmount, signature: null };
   }
 
-  async sell(args: { mint: string; tokenAmount: bigint; slippageBps: number; tipLamports: bigint; ticket: SignedTicket | null }): Promise<SellResult> {
+  async sell(args: {
+    mint: string;
+    tokenAmount: bigint;
+    slippageBps: number;
+    tipLamports: bigint;
+    ticket: SignedTicket | null;
+  }): Promise<SellResult> {
     if (args.tokenAmount <= 0n) return { ok: false, error: 'tokenAmount must be positive', burnedFeeLamports: 0n };
     if (args.tipLamports < 0n) return { ok: false, error: 'tip must be non-negative', burnedFeeLamports: 0n };
     let q: QuoteResult;

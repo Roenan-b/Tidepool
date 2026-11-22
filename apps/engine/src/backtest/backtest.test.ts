@@ -32,8 +32,23 @@ describe('backtest end to end on synthetic data', () => {
     expect(sellBurns + r.summary.failedBuyBurnLamports).toBe(r.costs.failedTxBurnLamports);
     // Costs are non-negative and add up.
     const c = r.costs;
-    for (const v of [c.venueFeeLamports, c.slippageLamports, c.priceImpactLamports, c.tipLamports, c.baseFeeLamports, c.failedTxBurnLamports]) expect(v >= 0n).toBe(true);
-    expect(c.totalLamports).toBe(c.venueFeeLamports + c.slippageLamports + c.priceImpactLamports + c.tipLamports + c.baseFeeLamports + c.failedTxBurnLamports);
+    for (const v of [
+      c.venueFeeLamports,
+      c.slippageLamports,
+      c.priceImpactLamports,
+      c.tipLamports,
+      c.baseFeeLamports,
+      c.failedTxBurnLamports,
+    ])
+      expect(v >= 0n).toBe(true);
+    expect(c.totalLamports).toBe(
+      c.venueFeeLamports +
+        c.slippageLamports +
+        c.priceImpactLamports +
+        c.tipLamports +
+        c.baseFeeLamports +
+        c.failedTxBurnLamports,
+    );
     expect(c.tipLamports).toBe(BigInt(c.filledTransactions) * getPreset('balanced').strategy.tipLamports);
     // Daily table covers the run and sums to the total.
     expect(r.daily.map((d) => d.date)).toEqual(['2026-10-28', '2026-10-29', '2026-10-30']);
@@ -74,16 +89,42 @@ describe('loss limit', () => {
       for (let s = 0; s <= 3600; s += 30) {
         const t = base + s * 1000;
         const crashed = base === day1 && s >= 1200;
-        prices.push({ mint: MINT_A, at: new Date(t).toISOString(), priceLamportsPerUnit: crashed ? 0.05 : 1, liquidityUsd: crashed ? 300_000 : 1_000_000 });
+        prices.push({
+          mint: MINT_A,
+          at: new Date(t).toISOString(),
+          priceLamportsPerUnit: crashed ? 0.05 : 1,
+          liquidityUsd: crashed ? 300_000 : 1_000_000,
+        });
         prices.push({ mint: MINT_B, at: new Date(t).toISOString(), priceLamportsPerUnit: 2, liquidityUsd: 1_000_000 });
       }
     }
-    signals.push({ source: 'test', mint: MINT_A, kind: 'mention', observedAt: new Date(day1 + 600_000).toISOString(), payload: {} });
-    signals.push({ source: 'test', mint: MINT_B, kind: 'mention', observedAt: new Date(day1 + 1_800_000).toISOString(), payload: {} });
-    signals.push({ source: 'test', mint: MINT_B, kind: 'mention', observedAt: new Date(day2 + 600_000).toISOString(), payload: {} });
+    signals.push({
+      source: 'test',
+      mint: MINT_A,
+      kind: 'mention',
+      observedAt: new Date(day1 + 600_000).toISOString(),
+      payload: {},
+    });
+    signals.push({
+      source: 'test',
+      mint: MINT_B,
+      kind: 'mention',
+      observedAt: new Date(day1 + 1_800_000).toISOString(),
+      payload: {},
+    });
+    signals.push({
+      source: 'test',
+      mint: MINT_B,
+      kind: 'mention',
+      observedAt: new Date(day2 + 600_000).toISOString(),
+      payload: {},
+    });
     return { signals, prices };
   }
-  const alwaysHot: Scorer = (ctx) => { const c = defaultScorer(ctx); return c && { ...c, score: 100 }; };
+  const alwaysHot: Scorer = (ctx) => {
+    const c = defaultScorer(ctx);
+    return c && { ...c, score: 100 };
+  };
 
   it('halts entries for the rest of the day and resumes the next day', async () => {
     const r = await runBacktest(crashInput(), { preset: 'balanced', scorer: alwaysHot, failureRate: 0 });
@@ -103,13 +144,41 @@ describe('loss limit', () => {
     const clock = new SimClock(Date.parse('2026-11-01T00:00:00Z'));
     const risk = new MemoryRiskOfficer({ preset: getPreset('balanced'), startingLamports: 10_000_000_000n, clock });
     const cand = { mint: MINT_A, expiresAt: '2026-11-01T00:01:00Z' } as never;
-    const big = await risk.reserve({ idempotencyKey: 'k1', sleeve: 'momentum-v1', mint: MINT_A, lamports: 600_000_000n, candidate: cand, positionShareOfLiquidity: 0.001 });
+    const big = await risk.reserve({
+      idempotencyKey: 'k1',
+      sleeve: 'momentum-v1',
+      mint: MINT_A,
+      lamports: 600_000_000n,
+      candidate: cand,
+      positionShareOfLiquidity: 0.001,
+    });
     expect(big).toMatchObject({ approved: false, reason: expect.stringMatching(/position_cap/) });
-    const thin = await risk.reserve({ idempotencyKey: 'k2', sleeve: 'momentum-v1', mint: MINT_A, lamports: 100_000_000n, candidate: cand, positionShareOfLiquidity: 0.02 });
+    const thin = await risk.reserve({
+      idempotencyKey: 'k2',
+      sleeve: 'momentum-v1',
+      mint: MINT_A,
+      lamports: 100_000_000n,
+      candidate: cand,
+      positionShareOfLiquidity: 0.02,
+    });
     expect(thin).toMatchObject({ approved: false, reason: expect.stringMatching(/liquidity/) });
-    const ok = await risk.reserve({ idempotencyKey: 'k3', sleeve: 'momentum-v1', mint: MINT_A, lamports: 500_000_000n, candidate: cand, positionShareOfLiquidity: 0.001 });
+    const ok = await risk.reserve({
+      idempotencyKey: 'k3',
+      sleeve: 'momentum-v1',
+      mint: MINT_A,
+      lamports: 500_000_000n,
+      candidate: cand,
+      positionShareOfLiquidity: 0.001,
+    });
     expect(ok.approved).toBe(true);
-    const again = await risk.reserve({ idempotencyKey: 'k3', sleeve: 'momentum-v1', mint: MINT_A, lamports: 500_000_000n, candidate: cand, positionShareOfLiquidity: 0.001 });
+    const again = await risk.reserve({
+      idempotencyKey: 'k3',
+      sleeve: 'momentum-v1',
+      mint: MINT_A,
+      lamports: 500_000_000n,
+      candidate: cand,
+      positionShareOfLiquidity: 0.001,
+    });
     expect(again).toEqual(ok);
     expect(risk.equity()).toBe(10_000_000_000n);
   });
@@ -133,7 +202,19 @@ describe('walk-forward', () => {
       return defaultScorer(ctx);
     };
     const grid = [{ takeProfitPct: 10 }, { takeProfitPct: 14 }, { takeProfitPct: 20, stopLossPct: 12 }];
-    const r = await walkForward(input, { preset: 'balanced', seed: 3, split, grid, minTuneTrades: 1, scorer: spy, hooks: { onPhase: (p) => { phase = p; } } });
+    const r = await walkForward(input, {
+      preset: 'balanced',
+      seed: 3,
+      split,
+      grid,
+      minTuneTrades: 1,
+      scorer: spy,
+      hooks: {
+        onPhase: (p) => {
+          phase = p;
+        },
+      },
+    });
     expect(seen.tune.maxNow).toBeGreaterThan(0);
     expect(seen.tune.maxNow).toBeLessThan(split.getTime());
     expect(seen.tune.maxSignal).toBeLessThan(split.getTime());
@@ -179,14 +260,41 @@ describe('io and cli', () => {
       await writeJsonl(join(dir, 's.jsonl'), f.signals);
       await writeJsonl(join(dir, 'p.jsonl'), f.prices);
       await writeJsonl(join(dir, 'sol.jsonl'), f.solPrices);
-      const code = await main(['--signals', join(dir, 's.jsonl'), '--prices', join(dir, 'p.jsonl'), '--sol-prices', join(dir, 'sol.jsonl'), '--preset', 'balanced', '--out', join(dir, 'out')]);
+      const code = await main([
+        '--signals',
+        join(dir, 's.jsonl'),
+        '--prices',
+        join(dir, 'p.jsonl'),
+        '--sol-prices',
+        join(dir, 'sol.jsonl'),
+        '--preset',
+        'balanced',
+        '--out',
+        join(dir, 'out'),
+      ]);
       expect(code).toBe(0);
       const files = (await readdir(join(dir, 'out'))).sort();
       expect(files).toHaveLength(2);
       expect(files.every((n) => n.startsWith('synthetic-backtest-balanced-'))).toBe(true);
-      const md = await readFile(join(dir, 'out', files.find((n) => n.endsWith('.md'))!), 'utf8');
+      const md = await readFile(
+        join(
+          dir,
+          'out',
+          files.find((n) => n.endsWith('.md'))!,
+        ),
+        'utf8',
+      );
       expect(md).toContain('SYNTHETIC DATA');
-      const json = JSON.parse(await readFile(join(dir, 'out', files.find((n) => n.endsWith('.json'))!), 'utf8'));
+      const json = JSON.parse(
+        await readFile(
+          join(
+            dir,
+            'out',
+            files.find((n) => n.endsWith('.json'))!,
+          ),
+          'utf8',
+        ),
+      );
       expect(json.synthetic).toBe(true);
       const wf = await main(['--synthetic-demo', '--walk-forward', '--split', '2026-10-30', '--out', join(dir, 'wf')]);
       expect(wf).toBe(0);
@@ -201,11 +309,27 @@ describe('time-stop timing (review regression)', () => {
   it('fires at the deadline with the prices known then, not at the next recorded event', async () => {
     const t0 = Date.parse('2026-11-01T00:00:00Z');
     const prices: PricePoint[] = [];
-    for (let s = 0; s <= 600; s += 30) prices.push({ mint: MINT_A, at: new Date(t0 + s * 1000).toISOString(), priceLamportsPerUnit: 1, liquidityUsd: 1_000_000 });
+    for (let s = 0; s <= 600; s += 30)
+      prices.push({
+        mint: MINT_A,
+        at: new Date(t0 + s * 1000).toISOString(),
+        priceLamportsPerUnit: 1,
+        liquidityUsd: 1_000_000,
+      });
     // Data gap, then a price that would turn the late exit into a large take-profit.
-    prices.push({ mint: MINT_A, at: new Date(t0 + 2 * 3_600_000).toISOString(), priceLamportsPerUnit: 3, liquidityUsd: 1_000_000 });
-    const signals: SignalEvent[] = [{ source: 'test', mint: MINT_A, kind: 'mention', observedAt: new Date(t0 + 300_000).toISOString(), payload: {} }];
-    const hot: Scorer = (ctx) => { const c = defaultScorer(ctx); return c && { ...c, score: 100 }; };
+    prices.push({
+      mint: MINT_A,
+      at: new Date(t0 + 2 * 3_600_000).toISOString(),
+      priceLamportsPerUnit: 3,
+      liquidityUsd: 1_000_000,
+    });
+    const signals: SignalEvent[] = [
+      { source: 'test', mint: MINT_A, kind: 'mention', observedAt: new Date(t0 + 300_000).toISOString(), payload: {} },
+    ];
+    const hot: Scorer = (ctx) => {
+      const c = defaultScorer(ctx);
+      return c && { ...c, score: 100 };
+    };
     const r = await runBacktest({ signals, prices }, { preset: 'balanced', scorer: hot, failureRate: 0 });
     expect(r.trades).toHaveLength(1);
     const t = r.trades[0]!;

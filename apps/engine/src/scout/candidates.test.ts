@@ -3,7 +3,13 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import type { Candidate } from '@tidepool/core';
-import { InMemoryCandidateStore, PgCandidateSource, PgCandidateStore, type CandidateRow, type CandidateStore } from './candidates.js';
+import {
+  InMemoryCandidateStore,
+  PgCandidateSource,
+  PgCandidateStore,
+  type CandidateRow,
+  type CandidateStore,
+} from './candidates.js';
 import { PgNarrativeStore } from './narrative.js';
 import { PgSignalSink } from './sink.js';
 
@@ -133,17 +139,18 @@ describe.skipIf(!client)('Postgres repositories (isolated schema)', () => {
   });
 
   it('reads active cooldowns per mode', async () => {
-    await client!.query(`INSERT INTO cooldowns (mode, mint, until, reason) VALUES ('paper', 'x', $1, 'stop_loss'), ('live', 'y', $1, 'stop_loss'), ('paper', 'z', $2, 'stop_loss')`, [
-      new Date(NOW.getTime() + 60_000).toISOString(),
-      new Date(NOW.getTime() - 1).toISOString(),
-    ]);
+    await client!.query(
+      `INSERT INTO cooldowns (mode, mint, until, reason) VALUES ('paper', 'x', $1, 'stop_loss'), ('live', 'y', $1, 'stop_loss'), ('paper', 'z', $2, 'stop_loss')`,
+      [new Date(NOW.getTime() + 60_000).toISOString(), new Date(NOW.getTime() - 1).toISOString()],
+    );
     const m = await new PgCandidateStore(client!).activeCooldowns('paper', ['x', 'y', 'z'], NOW);
     expect([...m.keys()]).toEqual(['x']);
   });
 
   it('PgSignalSink writes batches to signals', async () => {
     const sink = new PgSignalSink(client!, { batchSize: 2 });
-    for (let i = 0; i < 5; i++) sink.emit({ source: 'dexscreener', mint: `m${i}`, kind: 'pair_snapshot', observedAt: NOW, payload: { i } });
+    for (let i = 0; i < 5; i++)
+      sink.emit({ source: 'dexscreener', mint: `m${i}`, kind: 'pair_snapshot', observedAt: NOW, payload: { i } });
     sink.emit({ source: 'helius', mint: null, kind: 'unresolved_tx', observedAt: NOW, payload: { signature: 's' } });
     await sink.flush();
     const { rows: r } = await client!.query(`SELECT source, mint, payload FROM signals ORDER BY id`);
@@ -155,8 +162,14 @@ describe.skipIf(!client)('Postgres repositories (isolated schema)', () => {
     await client!.query('DELETE FROM signals');
     const sink = new PgSignalSink(client!, { batchSize: 2 });
     const cutEmoji = '\u{1F438}\u{1F438}'.slice(0, 3); // ends with an unpaired high surrogate
-    sink.emit({ source: 'x', mint: 'm1', kind: 'post', observedAt: NOW, payload: { text: `a\u0000b ${cutEmoji}`, lone: '\uDC00' } });
-    sink.emit({ source: 'x', mint: 'm2', kind: 'post', observedAt: NOW, payload: { big: 1n } as unknown as Record<string, unknown> });
+    sink.emit({
+      source: 'x',
+      mint: 'm1',
+      kind: 'post',
+      observedAt: NOW,
+      payload: { text: `a\u0000b ${cutEmoji}`, lone: '\uDC00' },
+    });
+    sink.emit({ source: 'x', mint: 'm2', kind: 'post', observedAt: NOW, payload: { big: 1n } });
     sink.emit({ source: 'x', mint: 'm3', kind: 'post', observedAt: new Date(Number.NaN), payload: {} });
     sink.emit({ source: 'x', mint: 'm4', kind: 'post', observedAt: NOW, payload: { ok: true } });
     await sink.flush();

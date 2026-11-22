@@ -26,7 +26,11 @@ export async function POST(req: NextRequest) {
       case 'invalid':
         return errorJson(401, 'invalid_code', 'That code did not work. Wait for a new code and try again.');
       case 'locked':
-        return errorJson(429, 'locked', `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`);
+        return errorJson(
+          429,
+          'locked',
+          `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`,
+        );
       case 'session': {
         const res = json({ next: 'home' });
         setSessionCookie(res, r.token, r.expiresAt);

@@ -30,14 +30,22 @@ export function parseJsonText(text: string): BodyResult {
   }
 }
 
-export async function readJsonBody(req: { headers: Headers; body: ReadableStream<Uint8Array> | null }): Promise<BodyResult> {
+export async function readJsonBody(req: {
+  headers: Headers;
+  body: ReadableStream<Uint8Array> | null;
+}): Promise<BodyResult> {
   const declared = Number(req.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return { ok: false, message: 'Request body is too large' };
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
+    return { ok: false, message: 'Request body is too large' };
   const type = req.headers.get('content-type') ?? '';
   if (!type.toLowerCase().startsWith('application/json')) return { ok: false, message: 'Expected application/json' };
   // Content-Length can be absent (chunked) or wrong, so the limit is also enforced while reading.
   const read = await readBoundedText(req.body, MAX_BODY_BYTES);
-  if (!read.ok) return { ok: false, message: read.reason === 'too_large' ? 'Request body is too large' : 'Request body could not be read' };
+  if (!read.ok)
+    return {
+      ok: false,
+      message: read.reason === 'too_large' ? 'Request body is too large' : 'Request body could not be read',
+    };
   return parseJsonText(read.text);
 }
 

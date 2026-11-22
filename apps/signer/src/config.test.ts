@@ -28,7 +28,9 @@ describe('config', () => {
   });
 
   it('validates the withdraw allowlist as wallet addresses', () => {
-    expect(() => loadConfig({ ...base, SIGNER_WITHDRAW_ALLOWLIST: 'not-a-key' })).toThrow(/not a valid base58 public key/);
+    expect(() => loadConfig({ ...base, SIGNER_WITHDRAW_ALLOWLIST: 'not-a-key' })).toThrow(
+      /not a valid base58 public key/,
+    );
     const ata = associatedTokenAddress(Keypair.generate().publicKey, WRAPPED_SOL_MINT, TOKEN_PROGRAM_ID).toBase58();
     expect(() => loadConfig({ ...base, SIGNER_WITHDRAW_ALLOWLIST: ata })).toThrow(/off curve/);
   });
@@ -37,7 +39,9 @@ describe('config', () => {
     expect(() => loadConfig({ ...base, SIGNER_API_TOKEN: 'replace-with-64-hex-chars' })).toThrow(/SIGNER_API_TOKEN/);
     expect(() => loadConfig({ ...base, SIGNER_MAX_PER_TX_LAMPORTS: '9000000000' })).toThrow(/must not exceed/);
     expect(() => loadConfig({ ...base, SIGNER_MAX_TIP_LAMPORTS: '1.5' })).toThrow(/integer number of lamports/);
-    expect(() => loadConfig({ ...base, SIGNER_API_TOKEN: base.RESERVATION_TICKET_SECRET })).toThrow(/must be different/);
+    expect(() => loadConfig({ ...base, SIGNER_API_TOKEN: base.RESERVATION_TICKET_SECRET })).toThrow(
+      /must be different/,
+    );
     expect(() => loadConfig({ ...base, SIGNER_PORT: '' })).toThrow(/SIGNER_PORT/);
     expect(() => loadConfig({ ...base, SIGNER_PORT: '0' })).toThrow(/SIGNER_PORT/);
   });

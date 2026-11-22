@@ -27,7 +27,7 @@ export interface WalkForwardResult {
     window: { from: string | null; to: string | null };
     /** Latest timestamp of any record given to tuning runs (always before the split). */
     maxInputAt: string | null;
-    results: Array<{ params: GridPoint; trades: number; netAfterAllCostsLamports: bigint; maxDrawdownPct: number }>;
+    results: { params: GridPoint; trades: number; netAfterAllCostsLamports: bigint; maxDrawdownPct: number }[];
     chosen: GridPoint;
     chosenFromGrid: boolean;
   };
@@ -41,7 +41,11 @@ export function defaultGrid(presetName: PresetName): GridPoint[] {
   for (const tp of [s.takeProfitPct * 0.7, s.takeProfitPct, s.takeProfitPct * 1.5]) {
     for (const sl of [s.stopLossPct * 0.75, s.stopLossPct, s.stopLossPct * 1.5]) {
       for (const ms of [s.minScore - 5, s.minScore, s.minScore + 5]) {
-        grid.push({ takeProfitPct: Math.round(tp * 10) / 10, stopLossPct: Math.round(sl * 10) / 10, minScore: Math.min(100, Math.max(0, ms)) });
+        grid.push({
+          takeProfitPct: Math.round(tp * 10) / 10,
+          stopLossPct: Math.round(sl * 10) / 10,
+          minScore: Math.min(100, Math.max(0, ms)),
+        });
       }
     }
   }
@@ -52,8 +56,14 @@ export function defaultGrid(presetName: PresetName): GridPoint[] {
 export function splitInput(input: BacktestInput, split: Date): { tune: BacktestInput; test: BacktestInput } {
   const t = split.getTime();
   const before = (iso: string) => Date.parse(iso) < t;
-  const tune: BacktestInput = { signals: input.signals.filter((s) => before(s.observedAt)), prices: input.prices.filter((p) => before(p.at)) };
-  const test: BacktestInput = { signals: input.signals.filter((s) => !before(s.observedAt)), prices: input.prices.filter((p) => !before(p.at)) };
+  const tune: BacktestInput = {
+    signals: input.signals.filter((s) => before(s.observedAt)),
+    prices: input.prices.filter((p) => before(p.at)),
+  };
+  const test: BacktestInput = {
+    signals: input.signals.filter((s) => !before(s.observedAt)),
+    prices: input.prices.filter((p) => !before(p.at)),
+  };
   if (input.solPrices) {
     tune.solPrices = input.solPrices.filter((p) => before(p.at));
     test.solPrices = input.solPrices.filter((p) => !before(p.at));
@@ -77,7 +87,9 @@ export async function walkForward(input: BacktestInput, opts: WalkForwardOptions
   if (tuneMax !== null && tuneMax >= split.getTime()) throw new Error('internal: tune window contains test data');
   const grid = gridOpt ?? defaultGrid(opts.preset);
   const minTrades = minTuneTrades ?? 3;
-  const synthetic = opts.synthetic === true || input.signals.some((s) => s.source.startsWith('synthetic') || s.payload.synthetic === true);
+  const synthetic =
+    opts.synthetic === true ||
+    input.signals.some((s) => s.source.startsWith('synthetic') || s.payload.synthetic === true);
 
   hooks?.onPhase?.('tune');
   const results: WalkForwardResult['tune']['results'] = [];
@@ -87,10 +99,21 @@ export async function walkForward(input: BacktestInput, opts: WalkForwardOptions
     const r = await runBacktest(tune, { ...base, synthetic, paramOverrides: g });
     tuneFrom = r.window.from;
     tuneTo = r.window.to;
-    results.push({ params: g, trades: r.summary.trades, netAfterAllCostsLamports: r.summary.netAfterAllCostsLamports, maxDrawdownPct: r.summary.maxDrawdownPct });
+    results.push({
+      params: g,
+      trades: r.summary.trades,
+      netAfterAllCostsLamports: r.summary.netAfterAllCostsLamports,
+      maxDrawdownPct: r.summary.maxDrawdownPct,
+    });
   }
   const eligible = results.filter((r) => r.trades >= minTrades);
-  eligible.sort((a, b) => (b.netAfterAllCostsLamports > a.netAfterAllCostsLamports ? 1 : b.netAfterAllCostsLamports < a.netAfterAllCostsLamports ? -1 : a.maxDrawdownPct - b.maxDrawdownPct));
+  eligible.sort((a, b) =>
+    b.netAfterAllCostsLamports > a.netAfterAllCostsLamports
+      ? 1
+      : b.netAfterAllCostsLamports < a.netAfterAllCostsLamports
+        ? -1
+        : a.maxDrawdownPct - b.maxDrawdownPct,
+  );
   const best = eligible[0];
   const chosen: GridPoint = best ? best.params : {};
 
@@ -100,7 +123,13 @@ export async function walkForward(input: BacktestInput, opts: WalkForwardOptions
   return {
     split: split.toISOString(),
     synthetic,
-    tune: { window: { from: tuneFrom, to: tuneTo }, maxInputAt: tuneMax === null ? null : new Date(tuneMax).toISOString(), results, chosen, chosenFromGrid: Boolean(best) },
+    tune: {
+      window: { from: tuneFrom, to: tuneTo },
+      maxInputAt: tuneMax === null ? null : new Date(tuneMax).toISOString(),
+      results,
+      chosen,
+      chosenFromGrid: Boolean(best),
+    },
     test: testReport,
     baselineTest,
   };

@@ -24,8 +24,14 @@ export function promptHidden(question: string): Promise<string> {
     };
     const onData = (chunk: string) => {
       for (const ch of chunk) {
-        if (ch === '\r' || ch === '\n' || ch === '\u0004') return finish();
-        if (ch === '\u0003') return finish(new Error('cancelled'));
+        if (ch === '\r' || ch === '\n' || ch === '\u0004') {
+          finish();
+          return;
+        }
+        if (ch === '\u0003') {
+          finish(new Error('cancelled'));
+          return;
+        }
         if (ch === '\u007f' || ch === '\b') chars.pop();
         else chars.push(ch);
       }

@@ -38,7 +38,13 @@ function createEventB64(withCreator = true): string {
 }
 
 function completeEventB64(): string {
-  return Buffer.concat([anchorEventDiscriminator('CompleteEvent'), USER.toBuffer(), MINT.toBuffer(), CURVE.toBuffer(), Buffer.alloc(8)]).toString('base64');
+  return Buffer.concat([
+    anchorEventDiscriminator('CompleteEvent'),
+    USER.toBuffer(),
+    MINT.toBuffer(),
+    CURVE.toBuffer(),
+    Buffer.alloc(8),
+  ]).toString('base64');
 }
 
 const createLogs = (data: string) => [
@@ -58,7 +64,13 @@ describe('decodePumpEvent', () => {
     const ev = decodePumpEvent(createEventB64())!;
     expect(ev.event).toBe('create');
     expect(ev.mint).toBe(MINT.toBase58());
-    expect(ev.details).toMatchObject({ name: 'Dog Coin', symbol: 'DOG', bondingCurve: CURVE.toBase58(), user: USER.toBase58(), creator: CREATOR.toBase58() });
+    expect(ev.details).toMatchObject({
+      name: 'Dog Coin',
+      symbol: 'DOG',
+      bondingCurve: CURVE.toBase58(),
+      user: USER.toBase58(),
+      creator: CREATOR.toBase58(),
+    });
   });
 
   it('decodes the older CreateEvent layout without a creator', () => {
@@ -74,7 +86,11 @@ describe('decodePumpEvent', () => {
   it('returns null for truncated, oversized or unknown data', () => {
     const full = Buffer.from(createEventB64(), 'base64');
     expect(decodePumpEvent(full.subarray(0, 60).toString('base64'))).toBeNull();
-    const huge = Buffer.concat([anchorEventDiscriminator('CreateEvent'), Buffer.from([0xff, 0xff, 0xff, 0x7f]), Buffer.alloc(64)]);
+    const huge = Buffer.concat([
+      anchorEventDiscriminator('CreateEvent'),
+      Buffer.from([0xff, 0xff, 0xff, 0x7f]),
+      Buffer.alloc(64),
+    ]);
     expect(decodePumpEvent(huge.toString('base64'))).toBeNull();
     expect(decodePumpEvent(Buffer.alloc(80, 1).toString('base64'))).toBeNull();
   });
@@ -84,11 +100,22 @@ describe('parseLogNotification', () => {
   it('extracts a new token from a pump.fun create transaction', () => {
     const out = parseLogNotification({ signature: 'sig1', err: null, logs: createLogs(createEventB64()) });
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ kind: 'new_token', mint: MINT.toBase58(), signature: 'sig1', program: PUMP_FUN_PROGRAM_ID });
+    expect(out[0]).toMatchObject({
+      kind: 'new_token',
+      mint: MINT.toBase58(),
+      signature: 'sig1',
+      program: PUMP_FUN_PROGRAM_ID,
+    });
   });
 
   it('ignores failed transactions', () => {
-    expect(parseLogNotification({ signature: 's', err: { InstructionError: [0, 'Custom'] }, logs: createLogs(createEventB64()) })).toEqual([]);
+    expect(
+      parseLogNotification({
+        signature: 's',
+        err: { InstructionError: [0, 'Custom'] },
+        logs: createLogs(createEventB64()),
+      }),
+    ).toEqual([]);
   });
 
   it('does not trust event data printed by another program in the same transaction', () => {
@@ -102,10 +129,21 @@ describe('parseLogNotification', () => {
   });
 
   it('emits only the signature when the instruction is seen but the mint is not in the logs', () => {
-    const logs = [`Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`, 'Program log: Instruction: Create', `Program ${PUMP_FUN_PROGRAM_ID} success`];
+    const logs = [
+      `Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`,
+      'Program log: Instruction: Create',
+      `Program ${PUMP_FUN_PROGRAM_ID} success`,
+    ];
     const out = parseLogNotification({ signature: 'sig2', err: null, logs });
     expect(out).toEqual([
-      { kind: 'unresolved_tx', program: PUMP_FUN_PROGRAM_ID, instruction: 'Create', signature: 'sig2', mint: null, details: { intendedKind: 'new_token' } },
+      {
+        kind: 'unresolved_tx',
+        program: PUMP_FUN_PROGRAM_ID,
+        instruction: 'Create',
+        signature: 'sig2',
+        mint: null,
+        details: { intendedKind: 'new_token' },
+      },
     ]);
   });
 
@@ -137,8 +175,16 @@ describe('parseLogNotification', () => {
   });
 
   it('ignores ordinary swaps and respects the configured program list', () => {
-    const swap = [`Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`, 'Program log: Instruction: Sell', `Program ${PUMP_FUN_PROGRAM_ID} success`];
+    const swap = [
+      `Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`,
+      'Program log: Instruction: Sell',
+      `Program ${PUMP_FUN_PROGRAM_ID} success`,
+    ];
     expect(parseLogNotification({ signature: 's', err: null, logs: swap })).toEqual([]);
-    expect(parseLogNotification({ signature: 's', err: null, logs: createLogs(createEventB64()) }, [RAYDIUM_AMM_V4_PROGRAM_ID])).toEqual([]);
+    expect(
+      parseLogNotification({ signature: 's', err: null, logs: createLogs(createEventB64()) }, [
+        RAYDIUM_AMM_V4_PROGRAM_ID,
+      ]),
+    ).toEqual([]);
   });
 });

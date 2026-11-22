@@ -7,34 +7,49 @@ import type { PolicyConfig } from './policy.js';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 const lamports = (name: string) =>
-  z.string({ required_error: `${name} is required` }).regex(/^\d{1,20}$/, `${name} must be an integer number of lamports`).transform((v) => BigInt(v));
+  z
+    .string({ required_error: `${name} is required` })
+    .regex(/^\d{1,20}$/, `${name} must be an integer number of lamports`)
+    .transform((v) => BigInt(v));
 
 const pubkeyList = (name: string, requireOnCurve: boolean) =>
-  z.string().default('').transform((value, ctx) => {
-    const out: string[] = [];
-    for (const part of value.split(',').map((s) => s.trim()).filter(Boolean)) {
-      let key: PublicKey;
-      try {
-        key = new PublicKey(part);
-      } catch {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not a valid base58 public key` });
-        continue;
+  z
+    .string()
+    .default('')
+    .transform((value, ctx) => {
+      const out: string[] = [];
+      for (const part of value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)) {
+        let key: PublicKey;
+        try {
+          key = new PublicKey(part);
+        } catch {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not a valid base58 public key` });
+          continue;
+        }
+        if (key.toBase58() !== part) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not in canonical base58 form` });
+          continue;
+        }
+        if (requireOnCurve && !PublicKey.isOnCurve(key.toBytes())) {
+          // A wallet address is on the ed25519 curve; token accounts and PDAs are not.
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${name}: "${part}" is not a wallet address (off curve)`,
+          });
+          continue;
+        }
+        out.push(part);
       }
-      if (key.toBase58() !== part) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not in canonical base58 form` });
-        continue;
-      }
-      if (requireOnCurve && !PublicKey.isOnCurve(key.toBytes())) {
-        // A wallet address is on the ed25519 curve; token accounts and PDAs are not.
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not a wallet address (off curve)` });
-        continue;
-      }
-      out.push(part);
-    }
-    return [...new Set(out)];
-  });
+      return [...new Set(out)];
+    });
 
-const bool = z.enum(['true', 'false']).default('false').transform((v) => v === 'true');
+const bool = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((v) => v === 'true');
 
 const EnvSchema = z.object({
   RESERVATION_TICKET_SECRET: z.string().min(32, 'RESERVATION_TICKET_SECRET must be at least 32 characters'),
@@ -83,7 +98,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): SignerConfig {
   }
   const e = parsed.data;
   if (!isLoopbackHost(e.SIGNER_HOST) && !e.SIGNER_ALLOW_NON_LOOPBACK) {
-    throw new Error(`SIGNER_HOST=${e.SIGNER_HOST} is not a loopback address; set SIGNER_ALLOW_NON_LOOPBACK=true only behind a private network`);
+    throw new Error(
+      `SIGNER_HOST=${e.SIGNER_HOST} is not a loopback address; set SIGNER_ALLOW_NON_LOOPBACK=true only behind a private network`,
+    );
   }
   if (e.SIGNER_MAX_PER_TX_LAMPORTS > e.SIGNER_MAX_PER_DAY_LAMPORTS) {
     throw new Error('SIGNER_MAX_PER_TX_LAMPORTS must not exceed SIGNER_MAX_PER_DAY_LAMPORTS');

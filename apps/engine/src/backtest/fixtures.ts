@@ -22,7 +22,7 @@ const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 function fakeMint(rng: Rng): string {
   let s = '';
-  for (let i = 0; i < 44; i++) s += ALPHABET[Math.floor(rng() * ALPHABET.length)];
+  for (let i = 0; i < 44; i++) s += ALPHABET[Math.floor(rng() * ALPHABET.length)]!;
   return s;
 }
 
@@ -31,7 +31,9 @@ function gaussian(rng: Rng): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
 }
 
-export function generateSyntheticFixture(o: SyntheticOptions = {}): Required<BacktestInput> & { meta: { synthetic: true; seed: number; mints: string[] } } {
+export function generateSyntheticFixture(
+  o: SyntheticOptions = {},
+): Required<BacktestInput> & { meta: { synthetic: true; seed: number; mints: string[] } } {
   const seed = o.seed ?? 42;
   const rng = createRng(seed);
   const nMints = o.mints ?? 6;
@@ -84,17 +86,33 @@ export function generateSyntheticFixture(o: SyntheticOptions = {}): Required<Bac
         pumpRate = 0.004 + rng() * 0.012;
       }
       price *= Math.exp(drift + 0.004 * gaussian(rng));
-      if (rng() < rugProb) { price *= 0.2; liq *= 0.3; }
+      if (rng() < rugProb) {
+        price *= 0.2;
+        liq *= 0.3;
+      }
       liq = Math.max(5_000, liq * (1 + 0.003 * gaussian(rng)));
       prices.push({ mint, at: iso(t), priceLamportsPerUnit: price, liquidityUsd: Math.round(liq) });
 
       // Mentions: elevated during lead-in and pumps (partly predictive), plus background noise.
-      const mentions = leadIn > 0 ? 3 + Math.floor(rng() * 3) : pumpLeft > 0 ? 1 + Math.floor(rng() * 3) : rng() < 0.03 ? 1 : 0;
+      const mentions =
+        leadIn > 0 ? 3 + Math.floor(rng() * 3) : pumpLeft > 0 ? 1 + Math.floor(rng() * 3) : rng() < 0.03 ? 1 : 0;
       for (let k = 0; k < mentions; k++) {
-        signals.push({ source: 'synthetic-social', mint, kind: 'mention', observedAt: iso(t + Math.floor(rng() * step)), payload: { synthetic: true, symbol } });
+        signals.push({
+          source: 'synthetic-social',
+          mint,
+          kind: 'mention',
+          observedAt: iso(t + Math.floor(rng() * step)),
+          payload: { synthetic: true, symbol },
+        });
       }
       if (i % Math.max(1, Math.floor(3_600_000 / step)) === 0) {
-        signals.push({ source: 'synthetic-dexscreener', mint, kind: 'trending', observedAt: iso(t), payload: { synthetic: true, symbol, volume5mUsd: Math.round(liq * 0.05) } });
+        signals.push({
+          source: 'synthetic-dexscreener',
+          mint,
+          kind: 'trending',
+          observedAt: iso(t),
+          payload: { synthetic: true, symbol, volume5mUsd: Math.round(liq * 0.05) },
+        });
       }
     }
   }

@@ -57,7 +57,7 @@ export function demoModeRefusal(env: Record<string, string | undefined>): string
   if (env.DEMO_MODE !== 'true') return null;
   if (env.NODE_ENV !== 'production') return null;
   const origin = env.DASHBOARD_ORIGIN ?? 'http://127.0.0.1:3000';
-  let loopback = false;
+  let loopback: boolean;
   try {
     loopback = isLoopbackHost(new URL(origin).hostname);
   } catch {
@@ -119,7 +119,7 @@ export function loadConfig(env: Record<string, string | undefined>): DashboardCo
 let cached: DashboardConfig | null = null;
 
 export function getConfig(): DashboardConfig {
-  if (!cached) cached = loadConfig(process.env);
+  cached ??= loadConfig(process.env);
   return cached;
 }
 

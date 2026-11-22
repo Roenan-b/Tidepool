@@ -19,8 +19,7 @@ export function hotp(secret: Uint8Array, counter: bigint | number, digits = TOTP
   msg.writeBigUInt64BE(c);
   const mac = createHmac('sha1', secret).update(msg).digest();
   const offset = mac[mac.length - 1]! & 0x0f;
-  const binary =
-    ((mac[offset]! & 0x7f) << 24) | (mac[offset + 1]! << 16) | (mac[offset + 2]! << 8) | mac[offset + 3]!;
+  const binary = ((mac[offset]! & 0x7f) << 24) | (mac[offset + 1]! << 16) | (mac[offset + 2]! << 8) | mac[offset + 3]!;
   const mod = 10 ** digits;
   return String(binary % mod).padStart(digits, '0');
 }
@@ -44,9 +43,7 @@ function constantTimeEqualStrings(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-export type TotpVerifyResult =
-  | { ok: true; step: number }
-  | { ok: false; reason: 'format' | 'mismatch' | 'replay' };
+export type TotpVerifyResult = { ok: true; step: number } | { ok: false; reason: 'format' | 'mismatch' | 'replay' };
 
 /**
  * Verifies a user-entered code. `lastAcceptedStep` is the highest step previously accepted for this

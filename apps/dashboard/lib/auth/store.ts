@@ -123,7 +123,10 @@ export class PgAuthStore implements AuthStore {
       [userId],
     );
     const cur = r.rows[0];
-    return { allowed: false, state: { failedAttempts: cur?.failed_attempts ?? 0, lockedUntil: cur?.locked_until ?? null } };
+    return {
+      allowed: false,
+      state: { failedAttempts: cur?.failed_attempts ?? 0, lockedUntil: cur?.locked_until ?? null },
+    };
   }
 
   async settleFailure(userId: string, now: Date): Promise<LockState> {
@@ -163,7 +166,13 @@ export class PgAuthStore implements AuthStore {
 
   async findSession(idHash: string, now: Date): Promise<SessionRecord | null> {
     const r = await this.pool.query<{
-      id_hash: string; user_id: string; expires_at: Date; last_seen_at: Date; username: string; role: Role; totp_enabled: boolean;
+      id_hash: string;
+      user_id: string;
+      expires_at: Date;
+      last_seen_at: Date;
+      username: string;
+      role: Role;
+      totp_enabled: boolean;
     }>(
       `SELECT s.id_hash, s.user_id, s.expires_at, s.last_seen_at, u.username, u.role, u.totp_enabled
          FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id

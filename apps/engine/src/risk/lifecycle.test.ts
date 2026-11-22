@@ -6,7 +6,18 @@ import { createTestSchema, type TestSchema } from '../db/testing.js';
 import { PgAuditLog } from '../audit/pgAuditLog.js';
 import { MemoryAlerter } from '../alerts/alerter.js';
 import { PgRiskOfficer, type RiskOfficerSettings } from './pgRiskOfficer.js';
-import { FakeClock, PresetBox, SOL, cashOf, fakeMint, ledgerSum, request, resetBook, stateOf, testPreset } from './testkit.js';
+import {
+  FakeClock,
+  PresetBox,
+  SOL,
+  cashOf,
+  fakeMint,
+  ledgerSum,
+  request,
+  resetBook,
+  stateOf,
+  testPreset,
+} from './testkit.js';
 
 const SECRET = 'x'.repeat(48);
 let db: TestSchema;
@@ -24,7 +35,12 @@ afterAll(async () => {
 
 function officer(mode: 'paper' | 'live', config: Partial<RiskOfficerSettings> = {}): PgRiskOfficer {
   return new PgRiskOfficer({
-    pool: db.pool, audit, clock, mode, preset: presets.resolver, alerter,
+    pool: db.pool,
+    audit,
+    clock,
+    mode,
+    preset: presets.resolver,
+    alerter,
     ticketSecret: mode === 'live' ? SECRET : null,
     config: { liveTradingEnabled: true, signerConfigured: true, ...config },
   });
@@ -41,7 +57,17 @@ beforeEach(async () => {
 async function openPosition(ro: PgRiskOfficer, spent: bigint, reserve = spent, mint = fakeMint()) {
   const d = await ro.reserve(request(mint, reserve, clock));
   if (!d.approved) throw new Error(`reserve vetoed: ${d.reason}`);
-  const { positionId } = await ro.recordFill({ reservationId: d.reservationId, orderId: 'buy', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: spent, tokenAmount: 1_000_000n, entryPriceUsd: 0.01, signature: null });
+  const { positionId } = await ro.recordFill({
+    reservationId: d.reservationId,
+    orderId: 'buy',
+    mint,
+    symbol: 'T',
+    strategy: 'momentum-v1',
+    lamportsSpent: spent,
+    tokenAmount: 1_000_000n,
+    entryPriceUsd: 0.01,
+    signature: null,
+  });
   return { positionId, reservationId: d.reservationId, mint };
 }
 
@@ -66,12 +92,28 @@ describe('fill and exit accounting', () => {
     expect(pos[0]!.markLamports).toBe(600_000_000n);
 
     await ro.authorizeExit(positionId, 'take_profit');
-    const { realizedPnlLamports } = await ro.recordExit({ positionId, orderId: 'sell', lamportsReceived: 590_000_007n, reason: 'take_profit', signature: null });
+    const { realizedPnlLamports } = await ro.recordExit({
+      positionId,
+      orderId: 'sell',
+      lamportsReceived: 590_000_007n,
+      reason: 'take_profit',
+      signature: null,
+    });
     expect(realizedPnlLamports).toBe(590_000_007n - 480_000_123n);
     expect(await cashOf(db.pool, 'paper')).toBe(10n * SOL - 480_000_123n + 590_000_007n);
     await expectInvariant();
     // Repeated exit report is idempotent.
-    expect((await ro.recordExit({ positionId, orderId: 'sell', lamportsReceived: 590_000_007n, reason: 'take_profit', signature: null })).realizedPnlLamports).toBe(realizedPnlLamports);
+    expect(
+      (
+        await ro.recordExit({
+          positionId,
+          orderId: 'sell',
+          lamportsReceived: 590_000_007n,
+          reason: 'take_profit',
+          signature: null,
+        })
+      ).realizedPnlLamports,
+    ).toBe(realizedPnlLamports);
     expect(await cashOf(db.pool, 'paper')).toBe(10n * SOL - 480_000_123n + 590_000_007n);
   });
 
@@ -104,7 +146,17 @@ describe('fill and exit accounting', () => {
     if (!d.approved) throw new Error('vetoed');
     clock.advance(120_000);
     await ro.expireStaleReservations();
-    await ro.recordFill({ reservationId: d.reservationId, orderId: 'late', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 1n, entryPriceUsd: 1, signature: null });
+    await ro.recordFill({
+      reservationId: d.reservationId,
+      orderId: 'late',
+      mint,
+      symbol: 'T',
+      strategy: 'momentum-v1',
+      lamportsSpent: SOL / 10n,
+      tokenAmount: 1n,
+      entryPriceUsd: 1,
+      signature: null,
+    });
     expect(alerter.alerts.some((a) => a.kind === 'accounting_warning')).toBe(true);
     await expectInvariant();
   });
@@ -119,12 +171,21 @@ describe('daily loss and drawdown limits', () => {
     const { positionId } = await openPosition(ro, SOL / 2n);
     await ro.markPositions([{ positionId, markLamports: SOL / 10n - 1n }]); // loss just over 0.4 SOL
     expect(await stateOf(db.pool, 'paper')).toEqual({ state: 'halted', reason: 'daily_loss_limit' });
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({ approved: false, reason: 'halted:daily_loss_limit' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({
+      approved: false,
+      reason: 'halted:daily_loss_limit',
+    });
     expect((await ro.canOpenNewPositions()).ok).toBe(false);
 
     // Exits still work while halted.
     await ro.authorizeExit(positionId, 'stop_loss');
-    await ro.recordExit({ positionId, orderId: 's', lamportsReceived: SOL / 10n, reason: 'stop_loss', signature: null });
+    await ro.recordExit({
+      positionId,
+      orderId: 's',
+      lamportsReceived: SOL / 10n,
+      reason: 'stop_loss',
+      signature: null,
+    });
     await expectInvariant();
 
     clock.set('2026-11-23T00:00:01.000Z');
@@ -183,10 +244,19 @@ describe('kill switch', () => {
     expect(await stateOf(db.pool, 'paper')).toEqual({ state: 'halted', reason: 'kill_switch' });
     const pos = await ro.openPositions();
     expect(pos.map((p) => p.status)).toEqual(['closing', 'closing']);
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({ approved: false, reason: 'halted:kill_switch' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({
+      approved: false,
+      reason: 'halted:kill_switch',
+    });
     for (const p of [p1, p2]) {
       await ro.authorizeExit(p.positionId, 'kill_switch');
-      await ro.recordExit({ positionId: p.positionId, orderId: 'k', lamportsReceived: SOL / 10n, reason: 'kill_switch', signature: null });
+      await ro.recordExit({
+        positionId: p.positionId,
+        orderId: 'k',
+        lamportsReceived: SOL / 10n,
+        reason: 'kill_switch',
+        signature: null,
+      });
     }
     expect(await ro.openPositions()).toHaveLength(0);
     expect(alerter.alerts.some((a) => a.kind === 'kill_switch')).toBe(true);
@@ -200,7 +270,9 @@ describe('reconciliation', () => {
     const ro = officer('paper');
     await ro.fundPaperPool(10n * SOL);
     expect((await ro.reconcile()).status).toBe('ok');
-    await db.pool.query(`INSERT INTO ledger_entries (mode, kind, lamports, note) VALUES ('paper', 'adjustment', 1, 'out-of-band write')`);
+    await db.pool.query(
+      `INSERT INTO ledger_entries (mode, kind, lamports, note) VALUES ('paper', 'adjustment', 1, 'out-of-band write')`,
+    );
     const r = await ro.reconcile();
     expect(r.status).toBe('mismatch');
     expect(await stateOf(db.pool, 'paper')).toEqual({ state: 'halted', reason: 'reconciliation_mismatch' });
@@ -233,7 +305,9 @@ describe('reconciliation', () => {
 
   it('halts with rpc_errors after repeated fetch failures', async () => {
     const live = officer('live', { reconcileMaxFetchFailures: 2 });
-    const fail = async (): Promise<bigint> => { throw new Error('timeout'); };
+    const fail = async (): Promise<bigint> => {
+      throw new Error('timeout');
+    };
     expect((await live.reconcile(fail)).status).toBe('error');
     expect((await live.reconcile(fail)).status).toBe('error');
     expect(await stateOf(db.pool, 'live')).toEqual({ state: 'halted', reason: 'rpc_errors' });
@@ -262,15 +336,28 @@ describe('live tickets and mode switching', () => {
     expect(verifyTicket(d.ticket, SECRET, clock.now().getTime())).toEqual({ ok: true });
     expect(verifyTicket(d.ticket, 'y'.repeat(48), clock.now().getTime()).ok).toBe(false);
     expect(d.ticket.ticket).toMatchObject({
-      intent: 'buy', mint, reservationId: d.reservationId,
+      intent: 'buy',
+      mint,
+      reservationId: d.reservationId,
       maxLamports: (SOL / 10n - presets.current.strategy.tipLamports).toString(),
-      maxTipLamports: presets.current.strategy.tipLamports.toString(), destination: null,
+      maxTipLamports: presets.current.strategy.tipLamports.toString(),
+      destination: null,
       expiresAt: d.expiresAt.getTime(),
     });
     const replay = await live.reserve(req);
     expect(replay.approved && replay.ticket?.mac).toBe(d.ticket.mac);
     // Exits get a sell ticket.
-    const { positionId } = await live.recordFill({ reservationId: d.reservationId, orderId: 'b', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 5n, entryPriceUsd: 1, signature: '3'.repeat(88) });
+    const { positionId } = await live.recordFill({
+      reservationId: d.reservationId,
+      orderId: 'b',
+      mint,
+      symbol: 'T',
+      strategy: 'momentum-v1',
+      lamportsSpent: SOL / 10n,
+      tokenAmount: 5n,
+      entryPriceUsd: 1,
+      signature: '3'.repeat(88),
+    });
     const exit = await live.authorizeExit(positionId, 'take_profit');
     expect(exit.ticket?.ticket.intent).toBe('sell');
     expect(verifyTicket(exit.ticket!, SECRET, clock.now().getTime())).toEqual({ ok: true });
@@ -279,16 +366,25 @@ describe('live tickets and mode switching', () => {
   });
 
   it('refuses live without the flag, the exact confirmation, or a signer', async () => {
-    expect(await officer('paper', { liveTradingEnabled: false }).setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({ ok: false, reason: 'live_trading_disabled' });
+    expect(await officer('paper', { liveTradingEnabled: false }).setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({
+      ok: false,
+      reason: 'live_trading_disabled',
+    });
     expect(await officer('paper').setMode('live', 'yes')).toEqual({ ok: false, reason: 'confirmation_required' });
     expect(await officer('paper').setMode('live', undefined)).toEqual({ ok: false, reason: 'confirmation_required' });
-    expect(await officer('paper', { signerConfigured: false }).setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({ ok: false, reason: 'signer_not_configured' });
+    expect(await officer('paper', { signerConfigured: false }).setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({
+      ok: false,
+      reason: 'signer_not_configured',
+    });
     // Refused while the current mode has open positions or held reservations.
     const ro = officer('paper');
     await ro.fundPaperPool(10n * SOL);
     await ro.start('balanced');
     await ro.reserve(request(fakeMint(), SOL / 10n, clock));
-    expect(await ro.setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({ ok: false, reason: 'open_positions_or_reservations' });
+    expect(await ro.setMode('live', LIVE_MODE_CONFIRMATION)).toEqual({
+      ok: false,
+      reason: 'open_positions_or_reservations',
+    });
     // A non-active mode cannot be started.
     expect(await officer('live').start('balanced')).toEqual({ ok: false, reason: 'mode_not_active' });
   });
@@ -330,7 +426,10 @@ describe('withdrawals', () => {
     await expect(ro.setWithdrawAddress('not an address')).rejects.toThrow(/invalid address/);
     await ro.setWithdrawAddress(addr());
     // free = 1 SOL - 0.1 SOL fee reserve
-    expect(await ro.requestWithdrawal(SOL - presets.current.limits.feeReserveLamports + 1n)).toEqual({ ok: false, reason: 'insufficient_free_cash' });
+    expect(await ro.requestWithdrawal(SOL - presets.current.limits.feeReserveLamports + 1n)).toEqual({
+      ok: false,
+      reason: 'insufficient_free_cash',
+    });
     expect((await ro.requestWithdrawal(SOL - presets.current.limits.feeReserveLamports)).ok).toBe(true);
     expect(await ro.requestWithdrawal(0n)).toEqual({ ok: false, reason: 'invalid_amount' });
   });
@@ -345,7 +444,12 @@ describe('withdrawals', () => {
     clock.advance(24 * 3600_000 + 1);
     const w = await live.requestWithdrawal(SOL);
     if (!w.ok || !w.ticket) throw new Error('expected a withdraw ticket');
-    expect(w.ticket.ticket).toMatchObject({ intent: 'withdraw', destination: a, maxLamports: SOL.toString(), mint: null });
+    expect(w.ticket.ticket).toMatchObject({
+      intent: 'withdraw',
+      destination: a,
+      maxLamports: SOL.toString(),
+      mint: null,
+    });
     expect(verifyTicket(w.ticket, SECRET, clock.now().getTime())).toEqual({ ok: true });
     // The hold blocks the funds until the transfer is booked.
     expect(await live.requestWithdrawal(2n * SOL)).toEqual({ ok: false, reason: 'insufficient_free_cash' });
@@ -371,7 +475,13 @@ describe('daily summary and audit', () => {
     await ro.fundPaperPool(10n * SOL);
     await ro.start('balanced');
     const { positionId } = await openPosition(ro, SOL / 10n);
-    await ro.recordExit({ positionId, orderId: 's', lamportsReceived: SOL / 5n, reason: 'take_profit', signature: null });
+    await ro.recordExit({
+      positionId,
+      orderId: 's',
+      lamportsReceived: SOL / 5n,
+      reason: 'take_profit',
+      signature: null,
+    });
     const s = await ro.dailySummary();
     expect(s).toMatchObject({ trades: 1, wins: 1, realizedPnlLamports: SOL / 10n, netPnlLamports: SOL / 10n });
     expect(alerter.summaries).toHaveLength(1);

@@ -17,14 +17,21 @@ export interface BookTotals {
   heldLamports: bigint;
   /** Held reservations that will become positions (withdrawal holds excluded). */
   heldEntryCount: number;
-  inPositionsLamports: bigint;   // sum of mark (or entry when unmarked) of open and closing positions
-  costBasisLamports: bigint;     // sum of entry_lamports of open and closing positions
+  inPositionsLamports: bigint; // sum of mark (or entry when unmarked) of open and closing positions
+  costBasisLamports: bigint; // sum of entry_lamports of open and closing positions
   openCount: number;
   closingCount: number;
 }
 
 export async function loadBookTotals(q: Queryable, mode: TradingMode): Promise<BookTotals> {
-  const res = await q.query<{ held: string; held_entry_count: string; in_positions: string; cost_basis: string; open_count: string; closing_count: string }>(
+  const res = await q.query<{
+    held: string;
+    held_entry_count: string;
+    in_positions: string;
+    cost_basis: string;
+    open_count: string;
+    closing_count: string;
+  }>(
     `SELECT
        (SELECT coalesce(sum(lamports), 0)::text FROM reservations WHERE mode = $1 AND status = 'held') AS held,
        (SELECT count(*)::text FROM reservations WHERE mode = $1 AND status = 'held' AND sleeve <> $2) AS held_entry_count,

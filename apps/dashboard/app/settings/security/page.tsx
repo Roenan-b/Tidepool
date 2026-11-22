@@ -15,7 +15,14 @@ export default async function SecurityPage() {
     <div className="desktop">
       <MenuBar viewer={publicViewer(viewer)} active="security" theme={theme} />
       <main id="main">
-        <WindowFrame title={<><strong>Security</strong> &middot; {viewer.username}</>} size="narrow">
+        <WindowFrame
+          title={
+            <>
+              <strong>Security</strong> &middot; {viewer.username}
+            </>
+          }
+          size="narrow"
+        >
           <SecurityPanel enabled={viewer.totpEnabled} demo={viewer.demo} role={viewer.role} />
         </WindowFrame>
       </main>

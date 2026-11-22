@@ -53,7 +53,11 @@ export class WithdrawalExecutor {
   constructor(private readonly deps: WithdrawalExecutorDeps) {}
 
   /** Builds the unsigned transfer. Exposed for tests. */
-  static buildTransfer(wallet: PublicKey, job: Pick<WithdrawalJob, 'lamports' | 'destination'>, blockhash: string): VersionedTransaction {
+  static buildTransfer(
+    wallet: PublicKey,
+    job: Pick<WithdrawalJob, 'lamports' | 'destination'>,
+    blockhash: string,
+  ): VersionedTransaction {
     if (job.lamports <= 0n) throw new Error('withdrawal amount must be positive');
     const to = new PublicKey(job.destination);
     const message = new TransactionMessage({
@@ -82,7 +86,10 @@ export class WithdrawalExecutor {
     try {
       blockhash = await this.deps.chain.latestBlockhash();
       const tx = WithdrawalExecutor.buildTransfer(this.deps.wallet, job, blockhash.blockhash);
-      signed = await this.deps.signer.sign({ ticket: job.ticket, transactionBase64: Buffer.from(tx.serialize()).toString('base64') });
+      signed = await this.deps.signer.sign({
+        ticket: job.ticket,
+        transactionBase64: Buffer.from(tx.serialize()).toString('base64'),
+      });
     } catch (err) {
       // Nothing was submitted; the hold expires on its own.
       return { status: 'refused', error: message(err) };

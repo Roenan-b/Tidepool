@@ -92,7 +92,9 @@ export class HttpClient {
     const raw = await this.rawJson(url, req);
     const parsed = schema.safeParse(raw);
     if (!parsed.success) {
-      throw new SchemaError(`response from ${this.scrub(redactUrl(url))} failed validation: ${parsed.error.issues.length} issue(s)`);
+      throw new SchemaError(
+        `response from ${this.scrub(redactUrl(url))} failed validation: ${parsed.error.issues.length} issue(s)`,
+      );
     }
     return parsed.data;
   }
@@ -150,7 +152,7 @@ export class HttpClient {
     const chunks: Uint8Array[] = [];
     let total = 0;
     if (res.body) {
-      const reader = res.body.getReader();
+      const reader = (res.body as ReadableStream<Uint8Array>).getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;

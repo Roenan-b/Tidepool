@@ -12,7 +12,18 @@ import { MemoryAlerter } from '../alerts/alerter.js';
 import { PgRiskOfficer, cleanSymbol, type RiskOfficerSettings } from './pgRiskOfficer.js';
 import { tokenSafetyVeto } from './safety.js';
 import { candidate } from './testkit.js';
-import { FakeClock, PresetBox, SOL, cashOf, fakeMint, ledgerSum, request, resetBook, stateOf, testPreset } from './testkit.js';
+import {
+  FakeClock,
+  PresetBox,
+  SOL,
+  cashOf,
+  fakeMint,
+  ledgerSum,
+  request,
+  resetBook,
+  stateOf,
+  testPreset,
+} from './testkit.js';
 
 const SECRET = 'z'.repeat(48);
 let db: TestSchema;
@@ -38,7 +49,12 @@ beforeEach(async () => {
 
 function officer(mode: 'paper' | 'live', config: Partial<RiskOfficerSettings> = {}, pool = db.pool): PgRiskOfficer {
   return new PgRiskOfficer({
-    pool, audit: pool === db.pool ? audit : new PgAuditLog({ pool, clock }), clock, mode, preset: presets.resolver, alerter,
+    pool,
+    audit: pool === db.pool ? audit : new PgAuditLog({ pool, clock }),
+    clock,
+    mode,
+    preset: presets.resolver,
+    alerter,
     ticketSecret: mode === 'live' ? SECRET : null,
     config: { liveTradingEnabled: true, signerConfigured: true, ...config },
   });
@@ -73,7 +89,17 @@ describe('idempotent replay never re-issues a settled reservation', () => {
     const req = request(mint, SOL / 10n, clock);
     const d = await ro.reserve(req);
     if (!d.approved) throw new Error('vetoed');
-    await ro.recordFill({ reservationId: d.reservationId, orderId: 'o', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 1n, entryPriceUsd: 1, signature: null });
+    await ro.recordFill({
+      reservationId: d.reservationId,
+      orderId: 'o',
+      mint,
+      symbol: 'T',
+      strategy: 'momentum-v1',
+      lamportsSpent: SOL / 10n,
+      tokenAmount: 1n,
+      entryPriceUsd: 1,
+      signature: null,
+    });
     expect(await ro.reserve(req)).toEqual({ approved: false, reason: 'reservation_filled' });
   });
 
@@ -124,7 +150,9 @@ describe('kill switch keeps withdrawal holds', () => {
     expect(w.ok).toBe(true);
     const k = await live.killSwitch('owner');
     expect(k.reservationsReleased).toBe(0);
-    const held = await db.pool.query<{ status: string }>(`SELECT status FROM reservations WHERE sleeve = '__withdrawal'`);
+    const held = await db.pool.query<{ status: string }>(
+      `SELECT status FROM reservations WHERE sleeve = '__withdrawal'`,
+    );
     expect(held.rows.map((r) => r.status)).toEqual(['held']);
     // The same SOL cannot be authorized a second time.
     expect(await live.requestWithdrawal(2n * SOL)).toEqual({ ok: false, reason: 'insufficient_free_cash' });
@@ -169,8 +197,20 @@ describe('daily loss limit across the UTC day boundary', () => {
     await ro.start('balanced');
     const d = await ro.reserve(request(fakeMint(), SOL, clock));
     if (!d.approved) throw new Error('vetoed');
-    const mint = (await db.pool.query<{ mint: string }>('SELECT mint FROM reservations WHERE id = $1', [d.reservationId])).rows[0]!.mint;
-    const { positionId } = await ro.recordFill({ reservationId: d.reservationId, orderId: 'b', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: SOL, tokenAmount: 1n, entryPriceUsd: 1, signature: null });
+    const mint = (
+      await db.pool.query<{ mint: string }>('SELECT mint FROM reservations WHERE id = $1', [d.reservationId])
+    ).rows[0]!.mint;
+    const { positionId } = await ro.recordFill({
+      reservationId: d.reservationId,
+      orderId: 'b',
+      mint,
+      symbol: 'T',
+      strategy: 'momentum-v1',
+      lamportsSpent: SOL,
+      tokenAmount: 1n,
+      entryPriceUsd: 1,
+      signature: null,
+    });
     await ro.markPositions([{ positionId, markLamports: SOL }]);
     clock.set('2026-11-23T00:00:05.000Z');
     await ro.markPositions([{ positionId, markLamports: SOL / 2n }]); // -0.5 SOL, over the 0.4 SOL limit
@@ -186,8 +226,20 @@ describe('daily loss limit across the UTC day boundary', () => {
       await ro.start('balanced');
       const d = await ro.reserve(request(fakeMint(), SOL, clock));
       if (!d.approved) throw new Error('vetoed');
-      const mint = (await pool.query<{ mint: string }>('SELECT mint FROM reservations WHERE id = $1', [d.reservationId])).rows[0]!.mint;
-      const { positionId } = await ro.recordFill({ reservationId: d.reservationId, orderId: 'b', mint, symbol: 'T', strategy: 'momentum-v1', lamportsSpent: SOL, tokenAmount: 1n, entryPriceUsd: 1, signature: null });
+      const mint = (
+        await pool.query<{ mint: string }>('SELECT mint FROM reservations WHERE id = $1', [d.reservationId])
+      ).rows[0]!.mint;
+      const { positionId } = await ro.recordFill({
+        reservationId: d.reservationId,
+        orderId: 'b',
+        mint,
+        symbol: 'T',
+        strategy: 'momentum-v1',
+        lamportsSpent: SOL,
+        tokenAmount: 1n,
+        entryPriceUsd: 1,
+        signature: null,
+      });
       await ro.markPositions([{ positionId, markLamports: SOL / 2n }]);
       expect(await stateOf(pool, 'paper')).toEqual({ state: 'halted', reason: 'daily_loss_limit' });
     } finally {
@@ -201,12 +253,31 @@ describe('fills with untrusted descriptive fields are always booked', () => {
     const ro = officer('paper');
     await ro.fundPaperPool(10n * SOL);
     await ro.start('balanced');
-    for (const [symbol, price] of [['EVIL\u0000COIN', 1], ['L'.repeat(500), Number.NaN], ['\u0007', -1]] as const) {
+    for (const [symbol, price] of [
+      ['EVIL\u0000COIN', 1],
+      ['L'.repeat(500), Number.NaN],
+      ['\u0007', -1],
+    ] as const) {
       const mint = fakeMint();
       const d = await ro.reserve(request(mint, SOL / 10n, clock));
       if (!d.approved) throw new Error('vetoed');
-      const { positionId } = await ro.recordFill({ reservationId: d.reservationId, orderId: 'o', mint, symbol, strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 5n, entryPriceUsd: price, signature: null });
-      const row = (await db.pool.query<{ symbol: string; entry_price_usd: number }>('SELECT symbol, entry_price_usd FROM positions WHERE id = $1', [positionId])).rows[0]!;
+      const { positionId } = await ro.recordFill({
+        reservationId: d.reservationId,
+        orderId: 'o',
+        mint,
+        symbol,
+        strategy: 'momentum-v1',
+        lamportsSpent: SOL / 10n,
+        tokenAmount: 5n,
+        entryPriceUsd: price,
+        signature: null,
+      });
+      const row = (
+        await db.pool.query<{ symbol: string; entry_price_usd: number }>(
+          'SELECT symbol, entry_price_usd FROM positions WHERE id = $1',
+          [positionId],
+        )
+      ).rows[0]!;
       expect(row.symbol).toBe(cleanSymbol(symbol));
       expect(Number.isFinite(row.entry_price_usd)).toBe(true);
     }
@@ -221,24 +292,39 @@ describe('fills with untrusted descriptive fields are always booked', () => {
 describe('Token-2022 extensions are allowlisted, not just ban-listed', () => {
   const filters = testPreset().filters;
 
-  it.each(['pausableConfig', 'confidentialMintBurn', 'scaledUiAmountConfig', 'unparseableExtension', 'someFutureExtension'])(
-    'vetoes the unvetted extension %s',
-    (ext) => {
-      const c = candidate(fakeMint(), clock, { safety: { token2022Extensions: [ext] } });
-      expect(tokenSafetyVeto(c, filters, clock.now())).toBe(`safety:unvetted_token2022_extension:${ext}`);
-    },
-  );
+  it.each([
+    'pausableConfig',
+    'confidentialMintBurn',
+    'scaledUiAmountConfig',
+    'unparseableExtension',
+    'someFutureExtension',
+  ])('vetoes the unvetted extension %s', (ext) => {
+    const c = candidate(fakeMint(), clock, { safety: { token2022Extensions: [ext] } });
+    expect(tokenSafetyVeto(c, filters, clock.now())).toBe(`safety:unvetted_token2022_extension:${ext}`);
+  });
 
   it('accepts every vetted extension in any letter case', () => {
-    const exts = ['metadataPointer', 'TOKENMETADATA', 'groupPointer', 'tokenGroup', 'groupMemberPointer', 'tokenGroupMember', 'MintCloseAuthority'];
+    const exts = [
+      'metadataPointer',
+      'TOKENMETADATA',
+      'groupPointer',
+      'tokenGroup',
+      'groupMemberPointer',
+      'tokenGroupMember',
+      'MintCloseAuthority',
+    ];
     const c = candidate(fakeMint(), clock, { safety: { token2022Extensions: exts } });
     expect(tokenSafetyVeto(c, filters, clock.now())).toBeNull();
   });
 
   it('treats non-array extension data as invalid and keeps banned extensions on their own reason', () => {
-    const bad = candidate(fakeMint(), clock, { safety: { token2022Extensions: 'metadataPointer' as unknown as string[] } });
+    const bad = candidate(fakeMint(), clock, {
+      safety: { token2022Extensions: 'metadataPointer' as unknown as string[] },
+    });
     expect(tokenSafetyVeto(bad, filters, clock.now())).toBe('safety:token2022_unknown');
-    const banned = candidate(fakeMint(), clock, { safety: { token2022Extensions: ['metadataPointer', 'TransferHook'] } });
+    const banned = candidate(fakeMint(), clock, {
+      safety: { token2022Extensions: ['metadataPointer', 'TransferHook'] },
+    });
     expect(tokenSafetyVeto(banned, filters, clock.now())).toBe('safety:token2022_extension:TransferHook');
   });
 
@@ -246,7 +332,8 @@ describe('Token-2022 extensions are allowlisted, not just ban-listed', () => {
     const ro = officer('paper');
     await ro.fundPaperPool(10n * SOL);
     await ro.start('balanced');
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { safety: { token2022Extensions: ['pausableConfig'] } })))
-      .toEqual({ approved: false, reason: 'safety:unvetted_token2022_extension:pausableConfig' });
+    expect(
+      await ro.reserve(request(fakeMint(), SOL / 10n, clock, { safety: { token2022Extensions: ['pausableConfig'] } })),
+    ).toEqual({ approved: false, reason: 'safety:unvetted_token2022_extension:pausableConfig' });
   });
 });

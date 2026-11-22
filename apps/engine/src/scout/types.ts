@@ -43,7 +43,11 @@ export const noopLogger: Logger = {
 
 /** Database handle subset used by the Scout. A pg.Pool or pg.Client satisfies it. */
 export interface Queryable {
-  query<R = Record<string, unknown>>(text: string, params?: unknown[]): Promise<{ rows: R[]; rowCount?: number | null }>;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- mirrors the pg.Pool signature
+  query<R = Record<string, unknown>>(
+    text: string,
+    params?: unknown[],
+  ): Promise<{ rows: R[]; rowCount?: number | null }>;
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;

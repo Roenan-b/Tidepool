@@ -56,9 +56,16 @@ function finite(...xs: number[]): boolean {
   return xs.every((x) => typeof x === 'number' && Number.isFinite(x));
 }
 
-export function evaluateSafety(safety: TokenSafety, filters: TokenFilterThresholds, opts: EvaluateSafetyOptions = {}): FilterResult {
+export function evaluateSafety(
+  safety: TokenSafety,
+  filters: TokenFilterThresholds,
+  opts: EvaluateSafetyOptions = {},
+): FilterResult {
   const reasons: string[] = [];
-  if (!finite(safety.liquidityUsd, safety.top10HolderShare, safety.ageSeconds) || !Array.isArray(safety.token2022Extensions)) {
+  if (
+    !finite(safety.liquidityUsd, safety.top10HolderShare, safety.ageSeconds) ||
+    !Array.isArray(safety.token2022Extensions)
+  ) {
     return { pass: false, reasons: [FilterReasons.invalid] };
   }
   if (safety.mintAuthorityRevoked !== true) reasons.push(FilterReasons.mintAuthority);
@@ -71,7 +78,8 @@ export function evaluateSafety(safety: TokenSafety, filters: TokenFilterThreshol
     else if (!VETTED_TOKEN2022_EXTENSIONS.has(key)) reasons.push(`${FilterReasons.unvettedExtension}:${ext}`);
   }
   if (safety.liquidityUsd < filters.minLiquidityUsd) reasons.push(FilterReasons.liquidity);
-  if (safety.top10HolderShare > filters.maxTop10HolderShare || safety.top10HolderShare < 0) reasons.push(FilterReasons.concentration);
+  if (safety.top10HolderShare > filters.maxTop10HolderShare || safety.top10HolderShare < 0)
+    reasons.push(FilterReasons.concentration);
   if (safety.creatorFlagged !== false) reasons.push(FilterReasons.creator);
   if (safety.ageSeconds < filters.minAgeSeconds) reasons.push(FilterReasons.tooNew);
   if (safety.ageSeconds > filters.maxAgeSeconds) reasons.push(FilterReasons.tooOld);
@@ -84,16 +92,23 @@ export function evaluateSafety(safety: TokenSafety, filters: TokenFilterThreshol
 }
 
 /** Rejects a position whose USD size exceeds the allowed share of the token's liquidity. */
-export function evaluatePositionShare(positionUsd: number, liquidityUsd: number, filters: TokenFilterThresholds): FilterResult {
+export function evaluatePositionShare(
+  positionUsd: number,
+  liquidityUsd: number,
+  filters: TokenFilterThresholds,
+): FilterResult {
   if (!finite(positionUsd, liquidityUsd) || positionUsd < 0 || liquidityUsd <= 0) {
     return { pass: false, reasons: [FilterReasons.invalid] };
   }
   const share = positionUsd / liquidityUsd;
-  return share > filters.maxPositionShareOfLiquidity ? { pass: false, reasons: [FilterReasons.positionTooLarge] } : { pass: true, reasons: [] };
+  return share > filters.maxPositionShareOfLiquidity
+    ? { pass: false, reasons: [FilterReasons.positionTooLarge] }
+    : { pass: true, reasons: [] };
 }
 
 /** Rejects while a cooldown (for example after a stop-loss) is still running. */
 export function evaluateCooldown(cooldownUntil: Date | null, now: Date): FilterResult {
-  if (cooldownUntil && cooldownUntil.getTime() > now.getTime()) return { pass: false, reasons: [FilterReasons.cooldown] };
+  if (cooldownUntil && cooldownUntil.getTime() > now.getTime())
+    return { pass: false, reasons: [FilterReasons.cooldown] };
   return { pass: true, reasons: [] };
 }

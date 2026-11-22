@@ -7,19 +7,52 @@ import { toScoutSellQuoter, RpcHealthTracker, SolPriceFeed } from './adapters.js
 const MINT = 'So11111111111111111111111111111111111111112';
 
 function safety(over: Partial<TokenSafety> = {}): TokenSafety {
-  return { mint: MINT, mintAuthorityRevoked: true, freezeAuthorityRevoked: true, token2022Extensions: [], liquidityUsd: 50_000,
-    top10HolderShare: 0.2, creatorFlagged: false, ageSeconds: 7200, sellSimulationRatio: null, ...over };
+  return {
+    mint: MINT,
+    mintAuthorityRevoked: true,
+    freezeAuthorityRevoked: true,
+    token2022Extensions: [],
+    liquidityUsd: 50_000,
+    top10HolderShare: 0.2,
+    creatorFlagged: false,
+    ageSeconds: 7200,
+    sellSimulationRatio: null,
+    ...over,
+  };
 }
 
 function request(): ReservationRequest {
-  const candidate = { mint: MINT, symbol: 'X', pairAddress: MINT, score: 80, features: {} as Candidate['features'], safety: safety(),
-    reasons: [], observedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(), priceUsd: 1 } as Candidate;
-  return { idempotencyKey: 'k', sleeve: 'momentum-v1', mint: MINT, lamports: 100_000_000n, candidate, positionShareOfLiquidity: 0.001 };
+  const candidate = {
+    mint: MINT,
+    symbol: 'X',
+    pairAddress: MINT,
+    score: 80,
+    features: {} as Candidate['features'],
+    safety: safety(),
+    reasons: [],
+    observedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    priceUsd: 1,
+  } as Candidate;
+  return {
+    idempotencyKey: 'k',
+    sleeve: 'momentum-v1',
+    mint: MINT,
+    lamports: 100_000_000n,
+    candidate,
+    positionShareOfLiquidity: 0.001,
+  };
 }
 
 function fakeRisk() {
   const reserve = vi.fn(async (_req: ReservationRequest) => ({ approved: false as const, reason: 'test' }));
-  const risk = { reserve, mode: () => 'paper' as const, halt: vi.fn(async function (this: unknown) { return undefined; }) } as unknown as RiskOfficer;
+  const risk = {
+    reserve,
+    mode: () => 'paper' as const,
+    halt: vi.fn(async function (this: unknown) {
+      return undefined;
+    }),
+  } as unknown as RiskOfficer;
   return { risk, reserve };
 }
 
@@ -34,7 +67,11 @@ describe('withFreshSafety', () => {
 
   it('vetoes without calling the Risk Officer when the fresh check throws or mismatches', async () => {
     const { risk, reserve } = fakeRisk();
-    const failing = withFreshSafety(risk, { check: async () => { throw new Error('rpc down'); } });
+    const failing = withFreshSafety(risk, {
+      check: async () => {
+        throw new Error('rpc down');
+      },
+    });
     expect(await failing.reserve(request())).toEqual({ approved: false, reason: 'safety:recheck_failed' });
     const mismatched = withFreshSafety(risk, { check: async () => safety({ mint: 'other' }) });
     expect(await mismatched.reserve(request())).toEqual({ approved: false, reason: 'safety:recheck_mismatch' });
@@ -50,7 +87,10 @@ describe('withFreshSafety', () => {
 describe('adapters', () => {
   it('converts a round-trip ratio into expected and quoted lamports', async () => {
     const q = toScoutSellQuoter({ quoteSellRatio: async () => 0.93 });
-    expect(await q.quoteSell({ mint: MINT, sizeLamports: 1_000_000_000n })).toEqual({ expectedLamports: 1_000_000_000n, quotedLamports: 930_000_000n });
+    expect(await q.quoteSell({ mint: MINT, sizeLamports: 1_000_000_000n })).toEqual({
+      expectedLamports: 1_000_000_000n,
+      quotedLamports: 930_000_000n,
+    });
     const none = toScoutSellQuoter({ quoteSellRatio: async () => null });
     expect(await none.quoteSell({ mint: MINT, sizeLamports: 1n })).toBeNull();
   });
@@ -70,7 +110,8 @@ describe('adapters', () => {
     expect(h.snapshot().healthy).toBe(false);
     h.record(true);
     expect(h.snapshot().healthy).toBe(true);
-    h.record(false); h.record(false);
+    h.record(false);
+    h.record(false);
     expect(h.snapshot().healthy).toBe(false);
   });
 });

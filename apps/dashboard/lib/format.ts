@@ -26,9 +26,14 @@ function divRound(n: bigint, d: bigint): bigint {
 }
 
 /** "1.2345 SOL" style. `fractionDigits` 0..9; rounds to the nearest displayed unit. */
-export function formatSol(lamports: string | bigint, fractionDigits = 4, opts: { signed?: boolean; unit?: boolean } = {}): string {
+export function formatSol(
+  lamports: string | bigint,
+  fractionDigits = 4,
+  opts: { signed?: boolean; unit?: boolean } = {},
+): string {
   const l = toLamports(lamports);
-  if (!Number.isInteger(fractionDigits) || fractionDigits < 0 || fractionDigits > 9) throw new RangeError('fractionDigits');
+  if (!Number.isInteger(fractionDigits) || fractionDigits < 0 || fractionDigits > 9)
+    throw new RangeError('fractionDigits');
   const scale = 10n ** BigInt(9 - fractionDigits);
   const rounded = divRound(l, scale);
   const neg = rounded < 0n;
@@ -57,7 +62,11 @@ export function formatUsdCents(cents: bigint, opts: { signed?: boolean } = {}): 
 }
 
 /** "$1,234.56", or null when the price is unknown. */
-export function formatLamportsUsd(lamports: string | bigint, solUsd: number | null, opts: { signed?: boolean } = {}): string | null {
+export function formatLamportsUsd(
+  lamports: string | bigint,
+  solUsd: number | null,
+  opts: { signed?: boolean } = {},
+): string | null {
   const cents = lamportsToUsdCents(lamports, solUsd);
   return cents === null ? null : formatUsdCents(cents, opts);
 }
@@ -125,10 +134,12 @@ export function formatDateTime(iso: string | null): string {
  * for display. React already escapes markup; this removes control, bidirectional-override and
  * zero-width characters, which can make one token's name render like another's, and bounds the length.
  */
-const UNSAFE_DISPLAY_CHARS = /[\u0000-\u001F\u007F-\u009F؜​-‏‪-‮⁠-⁩﻿]/g;
+// eslint-disable-next-line no-control-regex -- strips control characters on purpose
+const UNSAFE_DISPLAY_CHARS = /[\u0000-\u001F\u007F-\u009F\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
 
 export function displayText(value: unknown, maxChars = 64): string {
   if (value === null || value === undefined) return '';
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- display helper accepts any value by design
   const clean = String(value).replace(UNSAFE_DISPLAY_CHARS, '');
   const chars = [...clean];
   return chars.length > maxChars ? `${chars.slice(0, maxChars - 1).join('')}…` : clean;

@@ -40,7 +40,9 @@ export function getAuthService(): AuthService {
 /** Demo mode only answers requests addressed to this machine. */
 export function demoHostAllowed(hostHeader: string | null): boolean {
   if (!hostHeader) return false;
-  const host = hostHeader.startsWith('[') ? hostHeader.slice(0, hostHeader.indexOf(']') + 1) : hostHeader.split(':')[0] ?? '';
+  const host = hostHeader.startsWith('[')
+    ? hostHeader.slice(0, hostHeader.indexOf(']') + 1)
+    : (hostHeader.split(':')[0] ?? '');
   return isLoopbackHost(host);
 }
 
@@ -72,7 +74,7 @@ export async function requirePage(page: PageName): Promise<Viewer> {
   const viewer = await getViewer();
   const target = pageRedirect(viewer, page);
   if (target) redirect(target);
-  return viewer as Viewer;
+  return viewer!;
 }
 
 export function setSessionCookie(res: NextResponse, token: string, expiresAt: Date): void {

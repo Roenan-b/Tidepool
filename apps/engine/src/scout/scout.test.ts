@@ -9,12 +9,25 @@ import type { SafetyRpc } from './safety.js';
 import type { SignalEvent } from './types.js';
 
 const key = (n: number) => new PublicKey(Buffer.alloc(32, n)).toBase58();
-const [A, B, C, D, E, F] = [1, 2, 3, 4, 5, 6].map((n) => key(n + 40)) as [string, string, string, string, string, string];
+const [A, B, C, D, E, F] = [1, 2, 3, 4, 5, 6].map((n) => key(n + 40)) as [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
 const NOW = new Date('2026-11-22T12:00:00Z');
 const clock = { now: () => NOW };
 
 function profile(mint: string): SignalEvent {
-  return { source: 'dexscreener', mint, kind: 'token_profile', observedAt: new Date(NOW.getTime() - 30_000), payload: { description: 'a dog', links: [] } };
+  return {
+    source: 'dexscreener',
+    mint,
+    kind: 'token_profile',
+    observedAt: new Date(NOW.getTime() - 30_000),
+    payload: { description: 'a dog', links: [] },
+  };
 }
 
 function snapshot(mint: string, o: Record<string, unknown> = {}): SignalEvent {
@@ -66,7 +79,15 @@ function build(safetyImpl: (mint: string) => Promise<TokenSafety>, config: Recor
     },
     hasFresh: () => false,
   };
-  const scout = new Scout({ persist, store, safety, preset: () => PRESETS.balanced, clock, config, narrativeStore: new MemoryNarrativeStore() });
+  const scout = new Scout({
+    persist,
+    store,
+    safety,
+    preset: () => PRESETS.balanced,
+    clock,
+    config,
+    narrativeStore: new MemoryNarrativeStore(),
+  });
   return { scout, store, persist, checked };
 }
 
@@ -134,10 +155,13 @@ describe('Scout cycle', () => {
   });
 
   it('limits uncached safety lookups per cycle and skips tokens whose check fails', async () => {
-    const { scout, store } = build(async (m) => {
-      if (m === F) throw new Error('rpc down');
-      return goodSafety(m);
-    }, { maxSafetyChecksPerCycle: 1 });
+    const { scout, store } = build(
+      async (m) => {
+        if (m === F) throw new Error('rpc down');
+        return goodSafety(m);
+      },
+      { maxSafetyChecksPerCycle: 1 },
+    );
     for (const m of [A, F]) {
       scout.sink.emit(profile(m));
       scout.sink.emit(snapshot(m));
@@ -193,7 +217,9 @@ describe('createScout', () => {
   });
 
   it('detects a Helius RPC URL for holder counts only on the Helius host', () => {
-    expect(scoutConfigFromEnv({ SOLANA_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=k' }).heliusRpcUrl).toBe('https://mainnet.helius-rpc.com/?api-key=k');
+    expect(scoutConfigFromEnv({ SOLANA_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=k' }).heliusRpcUrl).toBe(
+      'https://mainnet.helius-rpc.com/?api-key=k',
+    );
     expect(scoutConfigFromEnv({ SOLANA_RPC_URL: 'https://helius-rpc.com.evil.example/' }).heliusRpcUrl).toBeNull();
     expect(scoutConfigFromEnv({ SOLANA_RPC_URL: 'not a url' }).heliusRpcUrl).toBeNull();
   });

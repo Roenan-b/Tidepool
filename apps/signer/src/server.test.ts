@@ -56,11 +56,21 @@ function buyTx(wrap = 100_000_000n): string {
   return toBase64(v0(wallet, buyInstructions(wallet, { wrapLamports: wrap })));
 }
 
-interface Running { signer: SignerServer; url: string; logs: LogRecord[]; statePath: string }
+interface Running {
+  signer: SignerServer;
+  url: string;
+  logs: LogRecord[];
+  statePath: string;
+}
 
 async function start(statePath: string, overrides: Partial<SignerConfig> = {}): Promise<Running> {
   const logs: LogRecord[] = [];
-  const signer = createSignerServer({ config: config(overrides), keypair, state: SignerStateStore.open(statePath), logger: (r) => logs.push(r) });
+  const signer = createSignerServer({
+    config: config(overrides),
+    keypair,
+    state: SignerStateStore.open(statePath),
+    logger: (r) => logs.push(r),
+  });
   const { port } = await signer.listen();
   return { signer, url: `http://127.0.0.1:${port}`, logs, statePath };
 }
@@ -68,7 +78,11 @@ async function start(statePath: string, overrides: Partial<SignerConfig> = {}): 
 async function post(url: string, body: unknown, token: string | null = API_TOKEN) {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (token !== null) headers.authorization = `Bearer ${token}`;
-  const res = await fetch(`${url}/sign`, { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  const res = await fetch(`${url}/sign`, {
+    method: 'POST',
+    headers,
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
 }
 
@@ -92,13 +106,19 @@ describe('signer server', () => {
   });
 
   it('signs a valid request and returns a verifiable signature', async () => {
-    const { status, json } = await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() });
+    const { status, json } = await post(running.url, {
+      ticket: signTicket(ticket(), TICKET_SECRET),
+      transactionBase64: buyTx(),
+    });
     expect(status).toBe(200);
     expect(json.spendLamports).toBe('100000000');
     expect(json.tipLamports).toBe('1000000');
     const signed = VersionedTransaction.deserialize(Buffer.from(json.signedTransactionBase64 as string, 'base64'));
     expect(base58Encode(signed.signatures[0]!)).toBe(json.signature);
-    const key = createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(wallet.toBytes()).toString('base64url') }, format: 'jwk' });
+    const key = createPublicKey({
+      key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(wallet.toBytes()).toString('base64url') },
+      format: 'jwk',
+    });
     expect(edVerify(null, signed.message.serialize(), key, signed.signatures[0]!)).toBe(true);
     expect(running.logs.some((l) => l.event === 'sign_allowed' && l.signature === json.signature)).toBe(true);
   });
@@ -122,10 +142,16 @@ describe('signer server', () => {
 
   it('rejects an expired ticket and an over-long ticket lifetime', async () => {
     const now = Date.now();
-    const expired = await post(running.url, { ticket: signTicket(ticket({ issuedAt: now - 120_000, expiresAt: now - 60_000 }), TICKET_SECRET), transactionBase64: buyTx() });
+    const expired = await post(running.url, {
+      ticket: signTicket(ticket({ issuedAt: now - 120_000, expiresAt: now - 60_000 }), TICKET_SECRET),
+      transactionBase64: buyTx(),
+    });
     expect(expired.status).toBe(403);
     expect(expired.json.reasons).toEqual(['ticket expired']);
-    const tooLong = await post(running.url, { ticket: signTicket(ticket({ expiresAt: now + 3_600_000 }), TICKET_SECRET), transactionBase64: buyTx() });
+    const tooLong = await post(running.url, {
+      ticket: signTicket(ticket({ expiresAt: now + 3_600_000 }), TICKET_SECRET),
+      transactionBase64: buyTx(),
+    });
     expect(tooLong.status).toBe(403);
     expect(tooLong.json.reasons).toEqual(['ticket lifetime exceeds the signer maximum']);
   });
@@ -147,15 +173,19 @@ describe('signer server', () => {
     const denied = await post(running.url, { ticket: t, transactionBase64: bad });
     expect(denied.status).toBe(403);
     expect(denied.json.error).toBe('policy denied');
-    expect((denied.json.reasons as string[]).some((r) => /unapproved destination/.test(r))).toBe(true);
+    expect((denied.json.reasons as string[]).some((r) => r.includes('unapproved destination'))).toBe(true);
     expect((await post(running.url, { ticket: t, transactionBase64: buyTx() })).status).toBe(200);
   });
 
   it('enforces the daily cap and keeps it across a restart', async () => {
     const statePath = running.statePath;
     // Each buy counts 100,000,000 wrap + 1,000,000 tip + 200 priority fee = 101,000,200.
-    expect((await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() })).status).toBe(200);
-    expect((await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() })).status).toBe(200);
+    expect(
+      (await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() })).status,
+    ).toBe(200);
+    expect(
+      (await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() })).status,
+    ).toBe(200);
     const third = await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() });
     expect(third.status).toBe(403);
     expect((third.json.reasons as string[])[0]).toMatch(/daily cap exceeded/);
@@ -163,17 +193,30 @@ describe('signer server', () => {
 
     await running.signer.close();
     running = await start(statePath);
-    const afterRestart = await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx() });
+    const afterRestart = await post(running.url, {
+      ticket: signTicket(ticket(), TICKET_SECRET),
+      transactionBase64: buyTx(),
+    });
     expect(afterRestart.status).toBe(403);
     expect((afterRestart.json.reasons as string[])[0]).toMatch(/202000400 already signed today/);
     // A small transaction that fits under the remaining budget is still allowed.
-    const small = await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx(1_000_000n) });
+    const small = await post(running.url, {
+      ticket: signTicket(ticket(), TICKET_SECRET),
+      transactionBase64: buyTx(1_000_000n),
+    });
     expect(small.status).toBe(200);
   });
 
   it('rejects an oversize body with 413', async () => {
-    const big = JSON.stringify({ ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: 'A'.repeat(MAX_BODY_BYTES) });
-    const res = await fetch(`${running.url}/sign`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${API_TOKEN}` }, body: big });
+    const big = JSON.stringify({
+      ticket: signTicket(ticket(), TICKET_SECRET),
+      transactionBase64: 'A'.repeat(MAX_BODY_BYTES),
+    });
+    const res = await fetch(`${running.url}/sign`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${API_TOKEN}` },
+      body: big,
+    });
     expect(res.status).toBe(413);
   });
 
@@ -181,7 +224,17 @@ describe('signer server', () => {
     const port = new URL(running.url).port;
     const status = await new Promise<number>((resolve, reject) => {
       const req = httpRequest(
-        { host: '127.0.0.1', port, path: '/sign', method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${API_TOKEN}`, 'transfer-encoding': 'chunked' } },
+        {
+          host: '127.0.0.1',
+          port,
+          path: '/sign',
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${API_TOKEN}`,
+            'transfer-encoding': 'chunked',
+          },
+        },
         (res) => {
           res.resume();
           resolve(res.statusCode ?? 0);
@@ -189,7 +242,7 @@ describe('signer server', () => {
       );
       req.on('error', () => undefined); // the server closes the socket after answering
       const chunk = 'A'.repeat(8 * 1024);
-      for (let i = 0; i < (MAX_BODY_BYTES / chunk.length) + 2; i++) req.write(chunk);
+      for (let i = 0; i < MAX_BODY_BYTES / chunk.length + 2; i++) req.write(chunk);
       req.end();
       setTimeout(() => reject(new Error('no response')), 5_000).unref();
     });
@@ -198,20 +251,32 @@ describe('signer server', () => {
   });
 
   it('rejects non-JSON content types, malformed JSON and schema violations', async () => {
-    const res = await fetch(`${running.url}/sign`, { method: 'POST', headers: { 'content-type': 'text/plain', authorization: `Bearer ${API_TOKEN}` }, body: '{}' });
+    const res = await fetch(`${running.url}/sign`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', authorization: `Bearer ${API_TOKEN}` },
+      body: '{}',
+    });
     expect(res.status).toBe(415);
     expect((await post(running.url, '{oops')).status).toBe(400);
-    expect((await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx(), extra: 1 })).status).toBe(400);
-    expect((await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: 'AAAA' })).status).toBe(400);
+    expect(
+      (await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: buyTx(), extra: 1 }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await post(running.url, { ticket: signTicket(ticket(), TICKET_SECRET), transactionBase64: 'AAAA' })).status,
+    ).toBe(400);
   });
 
   it('rejects requests with a non-loopback Host header (DNS rebinding)', async () => {
     const port = new URL(running.url).port;
     const status = await new Promise<number>((resolve, reject) => {
-      const req = httpRequest({ host: '127.0.0.1', port, path: '/health', headers: { host: 'attacker.example:80' } }, (res) => {
-        res.resume();
-        resolve(res.statusCode ?? 0);
-      });
+      const req = httpRequest(
+        { host: '127.0.0.1', port, path: '/health', headers: { host: 'attacker.example:80' } },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
       req.on('error', reject);
       req.end();
     });
@@ -219,6 +284,12 @@ describe('signer server', () => {
   });
 
   it('refuses to bind a non-loopback host unless explicitly allowed', () => {
-    expect(() => createSignerServer({ config: config({ host: '0.0.0.0' }), keypair, state: SignerStateStore.open(join(dir, 'x.json')) })).toThrow(/non-loopback/);
+    expect(() =>
+      createSignerServer({
+        config: config({ host: '0.0.0.0' }),
+        keypair,
+        state: SignerStateStore.open(join(dir, 'x.json')),
+      }),
+    ).toThrow(/non-loopback/);
   });
 });

@@ -17,10 +17,15 @@ export const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
-export type JupiterErrorKind = 'timeout' | 'network' | 'http' | 'rate_limited' | 'no_route' | 'invalid_response' | 'queue_full' | 'invalid_request';
+export type JupiterErrorKind =
+  'timeout' | 'network' | 'http' | 'rate_limited' | 'no_route' | 'invalid_response' | 'queue_full' | 'invalid_request';
 
 export class JupiterError extends Error {
-  constructor(readonly kind: JupiterErrorKind, message: string, readonly status?: number) {
+  constructor(
+    readonly kind: JupiterErrorKind,
+    message: string,
+    readonly status?: number,
+  ) {
     super(message);
     this.name = 'JupiterError';
   }
@@ -29,31 +34,38 @@ export class JupiterError extends Error {
 const U64 = z.string().regex(/^\d{1,20}$/);
 const Pubkey = z.string().regex(BASE58);
 
-const SwapInfo = z.object({
-  ammKey: Pubkey,
-  label: z.string().max(100).optional(),
-  inputMint: Pubkey,
-  outputMint: Pubkey,
-  inAmount: U64,
-  outAmount: U64,
-  feeAmount: U64.optional(),
-  feeMint: Pubkey.optional(),
-}).passthrough();
+const SwapInfo = z
+  .object({
+    ammKey: Pubkey,
+    label: z.string().max(100).optional(),
+    inputMint: Pubkey,
+    outputMint: Pubkey,
+    inAmount: U64,
+    outAmount: U64,
+    feeAmount: U64.optional(),
+    feeMint: Pubkey.optional(),
+  })
+  .passthrough();
 
 /** Quote response. passthrough() keeps unknown fields because the quote is sent back verbatim to swap-instructions. */
-export const QuoteResponseSchema = z.object({
-  inputMint: Pubkey,
-  inAmount: U64,
-  outputMint: Pubkey,
-  outAmount: U64,
-  otherAmountThreshold: U64,
-  swapMode: z.enum(['ExactIn', 'ExactOut']),
-  slippageBps: z.number().int().min(0).max(10_000),
-  priceImpactPct: z.string().regex(/^-?\d+(\.\d+)?([eE]-?\d+)?$/),
-  routePlan: z.array(z.object({ swapInfo: SwapInfo, percent: z.number().min(0).max(100).nullable().optional() }).passthrough()).min(1).max(32),
-  contextSlot: z.number().optional(),
-  timeTaken: z.number().optional(),
-}).passthrough();
+export const QuoteResponseSchema = z
+  .object({
+    inputMint: Pubkey,
+    inAmount: U64,
+    outputMint: Pubkey,
+    outAmount: U64,
+    otherAmountThreshold: U64,
+    swapMode: z.enum(['ExactIn', 'ExactOut']),
+    slippageBps: z.number().int().min(0).max(10_000),
+    priceImpactPct: z.string().regex(/^-?\d+(\.\d+)?([eE]-?\d+)?$/),
+    routePlan: z
+      .array(z.object({ swapInfo: SwapInfo, percent: z.number().min(0).max(100).nullable().optional() }).passthrough())
+      .min(1)
+      .max(32),
+    contextSlot: z.number().optional(),
+    timeTaken: z.number().optional(),
+  })
+  .passthrough();
 export type JupiterQuote = z.infer<typeof QuoteResponseSchema>;
 
 export const InstructionSchema = z.object({
@@ -104,7 +116,8 @@ export class RateLimiter {
   ) {}
 
   schedule<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.pending >= this.maxQueue) return Promise.reject(new JupiterError('queue_full', 'jupiter request queue full'));
+    if (this.pending >= this.maxQueue)
+      return Promise.reject(new JupiterError('queue_full', 'jupiter request queue full'));
     this.pending += 1;
     const slot = this.tail.then(async () => {
       const wait = this.lastStart + this.minIntervalMs - this.now();
@@ -112,7 +125,9 @@ export class RateLimiter {
       this.lastStart = this.now();
     });
     this.tail = slot.catch(() => undefined);
-    return slot.then(fn).finally(() => { this.pending -= 1; });
+    return slot.then(fn).finally(() => {
+      this.pending -= 1;
+    });
   }
 }
 
@@ -125,8 +140,15 @@ export class JupiterClient {
 
   constructor(private readonly opts: JupiterClientOptions) {
     let u: URL;
-    try { u = new URL(opts.baseUrl); } catch { throw new Error('JUPITER_BASE_URL is not a valid URL'); }
-    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost'))) {
+    try {
+      u = new URL(opts.baseUrl);
+    } catch {
+      throw new Error('JUPITER_BASE_URL is not a valid URL');
+    }
+    if (
+      u.protocol !== 'https:' &&
+      !(u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost'))
+    ) {
       throw new Error('JUPITER_BASE_URL must use https');
     }
     this.base = opts.baseUrl.replace(/\/+$/, '');
@@ -137,10 +159,17 @@ export class JupiterClient {
   }
 
   /** GET {base}/swap/v1/quote */
-  async quote(args: { inputMint: string; outputMint: string; amount: bigint; slippageBps: number }): Promise<JupiterQuote> {
-    if (!BASE58.test(args.inputMint) || !BASE58.test(args.outputMint)) throw new JupiterError('invalid_request', 'invalid mint');
+  async quote(args: {
+    inputMint: string;
+    outputMint: string;
+    amount: bigint;
+    slippageBps: number;
+  }): Promise<JupiterQuote> {
+    if (!BASE58.test(args.inputMint) || !BASE58.test(args.outputMint))
+      throw new JupiterError('invalid_request', 'invalid mint');
     if (args.amount <= 0n || args.amount >= 2n ** 64n) throw new JupiterError('invalid_request', 'amount out of range');
-    if (!Number.isInteger(args.slippageBps) || args.slippageBps < 0 || args.slippageBps > 10_000) throw new JupiterError('invalid_request', 'slippageBps out of range');
+    if (!Number.isInteger(args.slippageBps) || args.slippageBps < 0 || args.slippageBps > 10_000)
+      throw new JupiterError('invalid_request', 'slippageBps out of range');
     const q = new URLSearchParams({
       inputMint: args.inputMint,
       outputMint: args.outputMint,
@@ -150,7 +179,11 @@ export class JupiterClient {
     });
     const body = await this.request('GET', `/swap/v1/quote?${q.toString()}`);
     const parsed = QuoteResponseSchema.safeParse(body);
-    if (!parsed.success) throw new JupiterError('invalid_response', `quote response failed validation: ${parsed.error.issues[0]?.path.join('.') ?? ''}`);
+    if (!parsed.success)
+      throw new JupiterError(
+        'invalid_response',
+        `quote response failed validation: ${parsed.error.issues[0]?.path.join('.') ?? ''}`,
+      );
     const r = parsed.data;
     const problem = quoteProblem(r, args);
     if (problem) throw new JupiterError('invalid_response', `quote does not match the request: ${problem}`);
@@ -175,10 +208,14 @@ export class JupiterClient {
       prioritizationFeeLamports: args.prioritizationFeeLamports,
     });
     if (body && typeof body === 'object' && 'error' in body) {
-      throw new JupiterError('http', `swap-instructions error: ${String((body as { error: unknown }).error).slice(0, 200)}`);
+      throw new JupiterError('http', `swap-instructions error: ${String(body.error).slice(0, 200)}`);
     }
     const parsed = SwapInstructionsSchema.safeParse(body);
-    if (!parsed.success) throw new JupiterError('invalid_response', `swap-instructions failed validation: ${parsed.error.issues[0]?.path.join('.') ?? ''}`);
+    if (!parsed.success)
+      throw new JupiterError(
+        'invalid_response',
+        `swap-instructions failed validation: ${parsed.error.issues[0]?.path.join('.') ?? ''}`,
+      );
     return parsed.data;
   }
 
@@ -198,20 +235,34 @@ export class JupiterClient {
         });
       } catch (err) {
         const name = err instanceof Error ? err.name : '';
-        if (name === 'TimeoutError' || name === 'AbortError') throw new JupiterError('timeout', `jupiter ${method} timed out after ${this.timeoutMs} ms`);
+        if (name === 'TimeoutError' || name === 'AbortError')
+          throw new JupiterError('timeout', `jupiter ${method} timed out after ${this.timeoutMs} ms`);
         throw new JupiterError('network', `jupiter ${method} network error`);
       }
       let text: string;
-      try { text = await res.text(); } catch { throw new JupiterError('network', 'failed to read jupiter response'); }
+      try {
+        text = await res.text();
+      } catch {
+        throw new JupiterError('network', 'failed to read jupiter response');
+      }
       if (text.length > this.maxBytes) throw new JupiterError('invalid_response', 'jupiter response too large');
       let body: unknown = null;
-      try { body = text.length ? JSON.parse(text) : null; } catch {
+      try {
+        body = text.length ? JSON.parse(text) : null;
+      } catch {
         if (res.ok) throw new JupiterError('invalid_response', 'jupiter response is not JSON');
       }
       if (res.status === 429) throw new JupiterError('rate_limited', 'jupiter rate limit hit', 429);
       if (!res.ok) {
-        const detail = body && typeof body === 'object' ? JSON.stringify({ error: (body as Record<string, unknown>).error, errorCode: (body as Record<string, unknown>).errorCode }).slice(0, 200) : '';
-        if ((res.status === 400 || res.status === 404) && /route/i.test(detail)) throw new JupiterError('no_route', `no route: ${detail}`, res.status);
+        const detail =
+          body && typeof body === 'object'
+            ? JSON.stringify({
+                error: (body as Record<string, unknown>).error,
+                errorCode: (body as Record<string, unknown>).errorCode,
+              }).slice(0, 200)
+            : '';
+        if ((res.status === 400 || res.status === 404) && /route/i.test(detail))
+          throw new JupiterError('no_route', `no route: ${detail}`, res.status);
         throw new JupiterError('http', `jupiter HTTP ${res.status} ${detail}`, res.status);
       }
       return body;
@@ -229,7 +280,10 @@ export class JupiterClient {
  * - Every route leg starts at the requested input or at another leg's output, ends at the requested output
  *   or at another leg's input, and at least one leg starts at the input and one ends at the output.
  */
-export function quoteProblem(q: JupiterQuote, req: { inputMint: string; outputMint: string; amount: bigint; slippageBps: number }): string | null {
+export function quoteProblem(
+  q: JupiterQuote,
+  req: { inputMint: string; outputMint: string; amount: bigint; slippageBps: number },
+): string | null {
   if (q.swapMode !== 'ExactIn') return 'swapMode is not ExactIn';
   if (q.inputMint !== req.inputMint || q.outputMint !== req.outputMint) return 'mints differ';
   if (q.inAmount !== req.amount.toString()) return 'inAmount differs';
@@ -238,7 +292,8 @@ export function quoteProblem(q: JupiterQuote, req: { inputMint: string; outputMi
   const min = BigInt(q.otherAmountThreshold);
   if (out <= 0n) return 'outAmount is zero';
   if (min > out) return 'otherAmountThreshold above outAmount';
-  if (min * 10_000n + 10_000n < out * BigInt(10_000 - req.slippageBps)) return 'otherAmountThreshold below the slippage bound';
+  if (min * 10_000n + 10_000n < out * BigInt(10_000 - req.slippageBps))
+    return 'otherAmountThreshold below the slippage bound';
   const ins = new Set(q.routePlan.map((l) => l.swapInfo.inputMint));
   const outs = new Set(q.routePlan.map((l) => l.swapInfo.outputMint));
   if (!ins.has(req.inputMint)) return 'route does not start at the input mint';
@@ -267,7 +322,10 @@ export function venueFromQuote(q: JupiterQuote): Venue {
 
 /** Quote source for PaperBroker backed by live Jupiter quotes. */
 export class JupiterQuoteSource implements QuoteSource {
-  constructor(private readonly client: Pick<JupiterClient, 'quote'>, private readonly slippageBps = 100) {}
+  constructor(
+    private readonly client: Pick<JupiterClient, 'quote'>,
+    private readonly slippageBps = 100,
+  ) {}
 
   async quote(mint: string, side: 'buy' | 'sell', amount: bigint): Promise<QuoteResult> {
     const [inputMint, outputMint] = side === 'buy' ? [SOL_MINT, mint] : [mint, SOL_MINT];
@@ -275,7 +333,8 @@ export class JupiterQuoteSource implements QuoteSource {
     try {
       q = await this.client.quote({ inputMint, outputMint, amount, slippageBps: this.slippageBps });
     } catch (err) {
-      if (err instanceof JupiterError && err.kind === 'no_route') return { priceLamportsPerUnit: 0, priceImpactPct: 0, routeOk: false };
+      if (err instanceof JupiterError && err.kind === 'no_route')
+        return { priceLamportsPerUnit: 0, priceImpactPct: 0, routeOk: false };
       throw err;
     }
     const inAmt = Number(q.inAmount);
@@ -283,7 +342,12 @@ export class JupiterQuoteSource implements QuoteSource {
     if (!(inAmt > 0) || !(outAmt > 0)) return { priceLamportsPerUnit: 0, priceImpactPct: 0, routeOk: false };
     // Buy: lamports in / tokens out. Sell: lamports out / tokens in.
     const price = side === 'buy' ? inAmt / outAmt : outAmt / inAmt;
-    return { priceLamportsPerUnit: price, priceImpactPct: priceImpactPercent(q), routeOk: true, venue: venueFromQuote(q) };
+    return {
+      priceLamportsPerUnit: price,
+      priceImpactPct: priceImpactPercent(q),
+      routeOk: true,
+      venue: venueFromQuote(q),
+    };
   }
 }
 
@@ -299,20 +363,33 @@ export interface SellQuoter {
 }
 
 export class JupiterSellQuoter implements SellQuoter {
-  constructor(private readonly client: Pick<JupiterClient, 'quote'>, private readonly slippageBps = 300) {}
+  constructor(
+    private readonly client: Pick<JupiterClient, 'quote'>,
+    private readonly slippageBps = 300,
+  ) {}
 
   async quoteSellRatio(mint: string, lamportsEquivalent: bigint): Promise<number | null> {
     if (!BASE58.test(mint) || lamportsEquivalent <= 0n) return null;
     let buy: JupiterQuote;
     try {
-      buy = await this.client.quote({ inputMint: SOL_MINT, outputMint: mint, amount: lamportsEquivalent, slippageBps: this.slippageBps });
+      buy = await this.client.quote({
+        inputMint: SOL_MINT,
+        outputMint: mint,
+        amount: lamportsEquivalent,
+        slippageBps: this.slippageBps,
+      });
     } catch {
       return null;
     }
     const tokens = BigInt(buy.outAmount);
     if (tokens <= 0n) return null;
     try {
-      const sell = await this.client.quote({ inputMint: mint, outputMint: SOL_MINT, amount: tokens, slippageBps: this.slippageBps });
+      const sell = await this.client.quote({
+        inputMint: mint,
+        outputMint: SOL_MINT,
+        amount: tokens,
+        slippageBps: this.slippageBps,
+      });
       const ratio = Number(BigInt(sell.outAmount)) / Number(lamportsEquivalent);
       return Number.isFinite(ratio) && ratio >= 0 ? ratio : null;
     } catch (err) {

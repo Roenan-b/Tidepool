@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { backoffDelay, isMintAddress, LruMap, pgSafeString, redactUrl, sanitizeText, toPgJson, TokenBucket, WindowBudget } from './util.js';
+import {
+  backoffDelay,
+  isMintAddress,
+  LruMap,
+  pgSafeString,
+  redactUrl,
+  sanitizeText,
+  toPgJson,
+  TokenBucket,
+  WindowBudget,
+} from './util.js';
 
 function fakeClock(start = 0) {
   let t = start;
@@ -71,7 +81,9 @@ describe('LruMap', () => {
 
 describe('helpers', () => {
   it('redacts query strings and credentials from URLs', () => {
-    expect(redactUrl('https://user:pw@mainnet.example.com/v0/x?api-key=SECRET')).toBe('https://mainnet.example.com/v0/x');
+    expect(redactUrl('https://user:pw@mainnet.example.com/v0/x?api-key=SECRET')).toBe(
+      'https://mainnet.example.com/v0/x',
+    );
     expect(redactUrl('not a url')).toBe('[unparseable-url]');
   });
 
@@ -91,7 +103,9 @@ describe('helpers', () => {
 
   it('produces Postgres-safe strings and JSON', () => {
     expect(pgSafeString('a\u0000b\uD83D')).toBe('ab\uFFFD');
-    expect(toPgJson({ t: 'x\u0000\uDC00', n: 1, nested: ['\uD800'] })).toBe('{"t":"x\uFFFD","n":1,"nested":["\uFFFD"]}');
+    expect(toPgJson({ t: 'x\u0000\uDC00', n: 1, nested: ['\uD800'] })).toBe(
+      '{"t":"x\uFFFD","n":1,"nested":["\uFFFD"]}',
+    );
   });
 
   it('validates canonical base58 public keys', () => {

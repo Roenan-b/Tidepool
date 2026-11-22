@@ -5,7 +5,13 @@
  */
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
-export function Sheet(props: { open: boolean; onClose: () => void; title: string; children: ReactNode; describedBy?: string }) {
+export function Sheet(props: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  describedBy?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const { open, onClose } = props;

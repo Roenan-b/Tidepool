@@ -36,9 +36,16 @@ function scrypt(password: string, salt: Buffer, keylen: number, params: ScryptPa
 
 function validParams(p: ScryptParams): boolean {
   return (
-    Number.isInteger(p.N) && p.N >= 2 && p.N <= MAX_N && (p.N & (p.N - 1)) === 0 &&
-    Number.isInteger(p.r) && p.r >= 1 && p.r <= MAX_R &&
-    Number.isInteger(p.p) && p.p >= 1 && p.p <= MAX_P
+    Number.isInteger(p.N) &&
+    p.N >= 2 &&
+    p.N <= MAX_N &&
+    (p.N & (p.N - 1)) === 0 &&
+    Number.isInteger(p.r) &&
+    p.r >= 1 &&
+    p.r <= MAX_R &&
+    Number.isInteger(p.p) &&
+    p.p >= 1 &&
+    p.p <= MAX_P
   );
 }
 

@@ -3,12 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "description": "Solana meme coin trading system: Scout, Trader and Risk Officer agents with a reservation ledger, an isolated signer and a one-button dashboard. Paper trading by default.",
-  "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=20.11" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "build": "npm run build -w @tidepool/core && npm run build -w @tidepool/engine -w @tidepool/signer",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test --workspaces --if-present -- --coverage",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "prepare": "husky",
     "db:up": "docker compose up -d postgres",
     "db:migrate": "npm run migrate -w @tidepool/engine",
     "engine": "npm run start -w @tidepool/engine",
@@ -17,9 +29,31 @@
     "backtest": "npm run backtest -w @tidepool/engine --"
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "15.5.29",
     "@types/node": "22.10.2",
+    "@vitest/coverage-v8": "3.2.4",
+    "eslint": "10.15.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.2",
+    "prettier": "3.10.1",
     "tsx": "4.19.2",
     "typescript": "5.9.3",
+    "typescript-eslint": "8.73.0",
     "vitest": "3.2.4"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
   }
 }

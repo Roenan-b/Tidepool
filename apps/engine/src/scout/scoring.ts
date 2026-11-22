@@ -20,7 +20,7 @@ import { clamp } from './util.js';
 export const SCORING_VERSION = 'scout-score-v1';
 
 export interface ScoringConfig {
-  liquidityTiers: Array<{ minUsd: number; points: number }>;
+  liquidityTiers: { minUsd: number; points: number }[];
   volumeTrendFull: number;
   volumeLevelFullUsd: number;
   holderGrowthFull: number;
@@ -142,7 +142,10 @@ export interface BuildCandidateArgs {
 
 /** Scores features and assembles the published Candidate. Expiry counts from the market snapshot time. */
 export function buildCandidate(a: BuildCandidateArgs): { candidate: Candidate; result: ScoreResult } {
-  const result = scoreFeatures({ features: a.features, onChainConfirmed: a.meta.onChainConfirmed, narrativeScamFlags: a.meta.narrativeScamFlags }, a.scoring);
+  const result = scoreFeatures(
+    { features: a.features, onChainConfirmed: a.meta.onChainConfirmed, narrativeScamFlags: a.meta.narrativeScamFlags },
+    a.scoring,
+  );
   const observedAt = a.meta.observedAt;
   const candidate: Candidate = {
     mint: a.mint,

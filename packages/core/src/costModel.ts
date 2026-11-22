@@ -5,9 +5,9 @@ import { bpsOf } from './money.js';
  * replace them with measured values once paper and micro-live data exist.
  */
 export interface CostModel {
-  venueFeeBps: number;           // per side
-  slippageBps: number;           // expected adverse fill vs quote, per side
-  tipLamports: bigint;           // per transaction
+  venueFeeBps: number; // per side
+  slippageBps: number; // expected adverse fill vs quote, per side
+  tipLamports: bigint; // per transaction
   baseFeeLamportsPerSig: bigint; // 5,000 lamports per signature on Solana
   signaturesPerTx: number;
   /** Probability (0..1) a transaction fails to land; failed transactions still pay base fee and tip. */
@@ -15,8 +15,22 @@ export interface CostModel {
 }
 
 export const COST_MODELS = {
-  bondingCurve: { venueFeeBps: 125, slippageBps: 100, tipLamports: 1_000_000n, baseFeeLamportsPerSig: 5_000n, signaturesPerTx: 1, failureRate: 0.1 },
-  graduated: { venueFeeBps: 30, slippageBps: 100, tipLamports: 1_000_000n, baseFeeLamportsPerSig: 5_000n, signaturesPerTx: 1, failureRate: 0.05 },
+  bondingCurve: {
+    venueFeeBps: 125,
+    slippageBps: 100,
+    tipLamports: 1_000_000n,
+    baseFeeLamportsPerSig: 5_000n,
+    signaturesPerTx: 1,
+    failureRate: 0.1,
+  },
+  graduated: {
+    venueFeeBps: 30,
+    slippageBps: 100,
+    tipLamports: 1_000_000n,
+    baseFeeLamportsPerSig: 5_000n,
+    signaturesPerTx: 1,
+    failureRate: 0.05,
+  },
 } satisfies Record<string, CostModel>;
 
 export function txOverheadLamports(m: CostModel): bigint {
@@ -24,9 +38,9 @@ export function txOverheadLamports(m: CostModel): bigint {
 }
 
 export interface BuyFill {
-  lamportsSpent: bigint;   // total SOL leaving the wallet, including fees and tip
-  tokenAmount: bigint;     // raw units received
-  effectivePrice: number;  // lamports per raw token unit
+  lamportsSpent: bigint; // total SOL leaving the wallet, including fees and tip
+  tokenAmount: bigint; // raw units received
+  effectivePrice: number; // lamports per raw token unit
 }
 
 /**
@@ -58,8 +72,8 @@ export function simulateSell(tokenAmount: bigint, quotePriceLamportsPerUnit: num
 
 /** Expected round-trip cost as a fraction of position size, excluding failures. */
 export function roundTripCostFraction(positionLamports: bigint, m: CostModel): number {
-  const venue = 2 * m.venueFeeBps / 10_000;
-  const slip = 2 * m.slippageBps / 10_000;
+  const venue = (2 * m.venueFeeBps) / 10_000;
+  const slip = (2 * m.slippageBps) / 10_000;
   const overhead = Number(2n * txOverheadLamports(m)) / Number(positionLamports);
   return venue + slip + overhead;
 }

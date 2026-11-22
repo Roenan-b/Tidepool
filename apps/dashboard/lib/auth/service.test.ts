@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Viewer } from './guard.js';
 import { claimAttempt, releaseAttempt, settleFailure, type ClaimResult, type LockState } from './lockout.js';
 import { hashPassword } from './password.js';
 import { encryptSecret } from './secretBox.js';
@@ -14,8 +13,12 @@ class MemoryStore implements AuthStore {
   sessions = new Map<string, NewSession & { lastSeenAt: Date }>();
   lastStep = new Map<string, number>();
   lastStepReads = 0;
-  async findUserByUsername(u: string) { return [...this.users.values()].find((x) => x.username === u) ?? null; }
-  async findUserById(id: string) { return this.users.get(id) ?? null; }
+  async findUserByUsername(u: string) {
+    return [...this.users.values()].find((x) => x.username === u) ?? null;
+  }
+  async findUserById(id: string) {
+    return this.users.get(id) ?? null;
+  }
   private apply(id: string, s: LockState): LockState {
     const u = this.users.get(id)!;
     u.failedAttempts = s.failedAttempts;
@@ -28,22 +31,58 @@ class MemoryStore implements AuthStore {
     this.apply(id, r.state);
     return r;
   }
-  async settleFailure(id: string, now: Date) { return this.apply(id, settleFailure(this.users.get(id)!, now)); }
-  async releaseAttempt(id: string, now: Date) { this.apply(id, releaseAttempt(this.users.get(id)!, now)); }
-  async resetFailures(id: string) { const u = this.users.get(id)!; u.failedAttempts = 0; u.lockedUntil = null; }
-  async createSession(s: NewSession, now: Date) { this.sessions.set(s.idHash, { ...s, lastSeenAt: now }); }
+  async settleFailure(id: string, now: Date) {
+    return this.apply(id, settleFailure(this.users.get(id)!, now));
+  }
+  async releaseAttempt(id: string, now: Date) {
+    this.apply(id, releaseAttempt(this.users.get(id)!, now));
+  }
+  async resetFailures(id: string) {
+    const u = this.users.get(id)!;
+    u.failedAttempts = 0;
+    u.lockedUntil = null;
+  }
+  async createSession(s: NewSession, now: Date) {
+    this.sessions.set(s.idHash, { ...s, lastSeenAt: now });
+  }
   async findSession(idHash: string, now: Date): Promise<SessionRecord | null> {
     const s = this.sessions.get(idHash);
     if (!s || s.expiresAt <= now) return null;
     const u = this.users.get(s.userId)!;
-    return { idHash, userId: u.id, expiresAt: s.expiresAt, lastSeenAt: s.lastSeenAt, username: u.username, role: u.role, totpEnabled: u.totpEnabled };
+    return {
+      idHash,
+      userId: u.id,
+      expiresAt: s.expiresAt,
+      lastSeenAt: s.lastSeenAt,
+      username: u.username,
+      role: u.role,
+      totpEnabled: u.totpEnabled,
+    };
   }
-  async touchSession(idHash: string, now: Date) { const s = this.sessions.get(idHash); if (s) s.lastSeenAt = now; }
-  async deleteSession(idHash: string) { this.sessions.delete(idHash); }
-  async deleteUserSessions(userId: string) { for (const [k, v] of this.sessions) if (v.userId === userId) this.sessions.delete(k); }
-  async setTotpSecret(id: string, enc: string) { const u = this.users.get(id)!; if (!u.totpEnabled) u.totpSecretEnc = enc; }
-  async enableTotp(id: string) { const u = this.users.get(id)!; if (u.totpEnabled || !u.totpSecretEnc) return false; u.totpEnabled = true; return true; }
-  async getTotpLastStep(id: string) { this.lastStepReads += 1; return this.lastStep.get(id) ?? null; }
+  async touchSession(idHash: string, now: Date) {
+    const s = this.sessions.get(idHash);
+    if (s) s.lastSeenAt = now;
+  }
+  async deleteSession(idHash: string) {
+    this.sessions.delete(idHash);
+  }
+  async deleteUserSessions(userId: string) {
+    for (const [k, v] of this.sessions) if (v.userId === userId) this.sessions.delete(k);
+  }
+  async setTotpSecret(id: string, enc: string) {
+    const u = this.users.get(id)!;
+    if (!u.totpEnabled) u.totpSecretEnc = enc;
+  }
+  async enableTotp(id: string) {
+    const u = this.users.get(id)!;
+    if (u.totpEnabled || !u.totpSecretEnc) return false;
+    u.totpEnabled = true;
+    return true;
+  }
+  async getTotpLastStep(id: string) {
+    this.lastStepReads += 1;
+    return this.lastStep.get(id) ?? null;
+  }
   async recordTotpStep(id: string, step: number) {
     const prev = this.lastStep.get(id);
     if (prev !== undefined && prev >= step) return false;
@@ -70,12 +109,24 @@ describe('AuthService', () => {
     svc = new AuthService({ store, key, sessionTtlHours: 12, replay: new ReplayGuard(), now: () => clock });
     const jakeId = randomUUID();
     jake = {
-      id: jakeId, username: 'jake', role: 'owner', passwordHash: await hashPassword('jake-password-1', FAST),
-      totpSecretEnc: encryptSecret(totpSecret, key, jakeId), totpEnabled: true, failedAttempts: 0, lockedUntil: null,
+      id: jakeId,
+      username: 'jake',
+      role: 'owner',
+      passwordHash: await hashPassword('jake-password-1', FAST),
+      totpSecretEnc: encryptSecret(totpSecret, key, jakeId),
+      totpEnabled: true,
+      failedAttempts: 0,
+      lockedUntil: null,
     };
     roe = {
-      id: randomUUID(), username: 'roe', role: 'operator', passwordHash: await hashPassword('roe-password-12', FAST),
-      totpSecretEnc: null, totpEnabled: false, failedAttempts: 0, lockedUntil: null,
+      id: randomUUID(),
+      username: 'roe',
+      role: 'operator',
+      passwordHash: await hashPassword('roe-password-12', FAST),
+      totpSecretEnc: null,
+      totpEnabled: false,
+      failedAttempts: 0,
+      lockedUntil: null,
     };
     store.users.set(jake.id, jake);
     store.users.set(roe.id, roe);
@@ -123,7 +174,7 @@ describe('AuthService', () => {
     const r = await svc.passwordStep('roe', 'roe-password-12', meta);
     expect(r.kind).toBe('session');
     if (r.kind !== 'session') return;
-    const viewer = (await svc.resolveSession(r.token)) as Viewer;
+    const viewer = (await svc.resolveSession(r.token))!;
     expect(viewer.totpEnabled).toBe(false);
     const e = await svc.startEnrollment(viewer);
     if (e.kind !== 'ok') throw new Error('expected enrollment');
@@ -145,7 +196,7 @@ describe('AuthService', () => {
     if (attacker.kind !== 'session') throw new Error('expected session');
     const mine = await svc.passwordStep('roe', 'roe-password-12', meta);
     if (mine.kind !== 'session') throw new Error('expected session');
-    const viewer = (await svc.resolveSession(mine.token)) as Viewer;
+    const viewer = (await svc.resolveSession(mine.token))!;
     const e = await svc.startEnrollment(viewer);
     if (e.kind !== 'ok') throw new Error('expected enrollment');
     const ok = await svc.confirmEnrollment(viewer, hotp(base32Decode(e.secretBase32), timeStep(clock.getTime())));
@@ -168,13 +219,16 @@ describe('AuthService', () => {
   });
 
   it('counts concurrent wrong passwords against the same five-attempt budget', async () => {
-    const results = await Promise.all(Array.from({ length: 12 }, () => svc.passwordStep('jake', 'wrong-password', meta)));
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => svc.passwordStep('jake', 'wrong-password', meta)),
+    );
     expect(results.filter((r) => r.kind === 'invalid').length).toBeLessThanOrEqual(4);
     expect((await svc.passwordStep('jake', 'jake-password-1', meta)).kind).toBe('locked');
   });
 
   it('does not charge a correct password against the lockout budget', async () => {
-    for (let i = 0; i < 6; i++) expect((await svc.passwordStep('jake', 'jake-password-1', meta)).kind).toBe('totp_required');
+    for (let i = 0; i < 6; i++)
+      expect((await svc.passwordStep('jake', 'jake-password-1', meta)).kind).toBe('totp_required');
     expect(jake.failedAttempts).toBe(0);
   });
 

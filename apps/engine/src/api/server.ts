@@ -20,7 +20,10 @@ import type { SignedTicket } from '@tidepool/core/ticket';
 export type ActorRole = 'owner' | 'operator';
 
 /** The Risk Officer operations the control API needs. PgRiskOfficer satisfies it. */
-export type RiskAdmin = Pick<PgRiskOfficer, 'mode' | 'start' | 'pause' | 'killSwitch' | 'clearHalt' | 'setMode' | 'setWithdrawAddress' | 'requestWithdrawal'>;
+export type RiskAdmin = Pick<
+  PgRiskOfficer,
+  'mode' | 'start' | 'pause' | 'killSwitch' | 'clearHalt' | 'setMode' | 'setWithdrawAddress' | 'requestWithdrawal'
+>;
 
 export interface ControlApiDeps {
   /** One officer, or a resolver returning the officer for the active mode. */
@@ -38,11 +41,19 @@ export interface ControlApiDeps {
    * Live mode: receives an authorized withdrawal (with its ticket) for signing and submission.
    * Called without awaiting; the outcome is audited and alerted by the executor.
    */
-  submitWithdrawal?: (job: { withdrawalId: string; lamports: bigint; destination: string; ticket: SignedTicket }) => void;
+  submitWithdrawal?: (job: {
+    withdrawalId: string;
+    lamports: bigint;
+    destination: string;
+    ticket: SignedTicket;
+  }) => void;
 }
 
 class HttpError extends Error {
-  constructor(public readonly statusCode: number, message: string) {
+  constructor(
+    public readonly statusCode: number,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -50,7 +61,11 @@ class HttpError extends Error {
 /** Simple in-memory token bucket keyed by route and role. */
 export class TokenBucketLimiter {
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
-  constructor(private readonly capacity: number, private readonly refillPerSecond: number, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly capacity: number,
+    private readonly refillPerSecond: number,
+    private readonly now: () => number = Date.now,
+  ) {}
   take(key: string): boolean {
     const t = this.now();
     const b = this.buckets.get(key) ?? { tokens: this.capacity, at: t };
@@ -93,22 +108,31 @@ const EventsQuery = z.object({
 });
 const SignalsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
-  source: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(),
+  source: z
+    .string()
+    .regex(/^[a-z0-9_-]{1,32}$/)
+    .optional(),
 });
 /** Dashboard username forwarded for the audit trail; informational only, never used for authorization. */
 const ACTOR_USER = /^[A-Za-z0-9_.-]{1,64}$/;
 
 declare module 'fastify' {
-  interface FastifyRequest { actorRole?: ActorRole; actorUser?: string }
+  interface FastifyRequest {
+    actorRole?: ActorRole;
+    actorUser?: string;
+  }
 }
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const r = schema.safeParse(value ?? {});
   if (!r.success) {
     const first = r.error.issues[0];
-    throw new HttpError(400, `invalid request: ${first ? `${first.path.join('.') || 'body'} ${first.message}` : 'body'}`.slice(0, 200));
+    throw new HttpError(
+      400,
+      `invalid request: ${first ? `${first.path.join('.') || 'body'} ${first.message}` : 'body'}`.slice(0, 200),
+    );
   }
-  return r.data;
+  return r.data as z.infer<T>;
 }
 
 /**
@@ -118,7 +142,8 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
  */
 export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
   const token = deps.config.api.token;
-  if (typeof token !== 'string' || token.length < 32) throw new Error('control API token must be at least 32 characters');
+  if (typeof token !== 'string' || token.length < 32)
+    throw new Error('control API token must be at least 32 characters');
   const limiter = new TokenBucketLimiter(deps.rateLimit?.capacity ?? 10, deps.rateLimit?.refillPerSecond ?? 1);
   const log = deps.logger;
   const officerFor = async (): Promise<RiskAdmin> => {
@@ -149,16 +174,35 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
     const e = err as { statusCode?: number; message?: string; code?: string };
     const status = typeof e.statusCode === 'number' && e.statusCode >= 400 && e.statusCode < 500 ? e.statusCode : 500;
     if (status >= 500) log?.error({ err: { message: e.message, code: e.code }, url: req.url }, 'control api error');
-    const message = err instanceof HttpError ? err.message : status === 413 ? 'request body too large' : status === 400 ? 'invalid request' : status >= 500 ? 'internal error' : 'request failed';
+    const message =
+      err instanceof HttpError
+        ? err.message
+        : status === 413
+          ? 'request body too large'
+          : status === 400
+            ? 'invalid request'
+            : status >= 500
+              ? 'internal error'
+              : 'request failed';
     void reply.code(status).send({ error: message });
   });
   app.setNotFoundHandler((_req, reply) => {
     void reply.code(404).send({ error: 'not found' });
   });
 
-  async function recordMutation(req: FastifyRequest, route: string, status: number, outcome: Record<string, unknown>): Promise<void> {
+  async function recordMutation(
+    req: FastifyRequest,
+    route: string,
+    status: number,
+    outcome: Record<string, unknown>,
+  ): Promise<void> {
     try {
-      await deps.audit.append({ actor: req.actorRole ?? 'operator', type: 'control_api_request', ref: null, payload: { route, status, actorUser: req.actorUser ?? null, ...outcome } });
+      await deps.audit.append({
+        actor: req.actorRole ?? 'operator',
+        type: 'control_api_request',
+        ref: null,
+        payload: { route, status, actorUser: req.actorUser ?? null, ...outcome },
+      });
     } catch (err) {
       log?.error({ err: { message: (err as Error).message }, route }, 'failed to audit control api request');
     }
@@ -179,7 +223,7 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
       }
       let body: z.infer<T>;
       try {
-        body = schema ? parse(schema, req.body) : (undefined as z.infer<T>);
+        body = schema ? parse(schema, req.body) : undefined;
       } catch (err) {
         await recordMutation(req, route, 400, { outcome: 'invalid_body' });
         throw err;
@@ -190,11 +234,17 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
       }
       try {
         const res = await handler(body, role);
-        await recordMutation(req, route, res.status, { outcome: res.status < 300 ? 'ok' : 'refused', result: res.body });
-        return reply.code(res.status).send(res.body);
+        await recordMutation(req, route, res.status, {
+          outcome: res.status < 300 ? 'ok' : 'refused',
+          result: res.body,
+        });
+        return await reply.code(res.status).send(res.body);
       } catch (err) {
         const status = err instanceof HttpError ? err.statusCode : 500;
-        await recordMutation(req, route, status, { outcome: 'error', error: err instanceof HttpError ? err.message : 'internal error' });
+        await recordMutation(req, route, status, {
+          outcome: 'error',
+          error: err instanceof HttpError ? err.message : 'internal error',
+        });
         throw err;
       }
     };
@@ -202,7 +252,11 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
 
   const anyRole = () => true;
   const refused = (reason: string) => ({ status: 409, body: { error: reason } });
-  const bigintSafe = (v: Record<string, unknown>) => JSON.parse(JSON.stringify(v, (_k, x: unknown) => (typeof x === 'bigint' ? x.toString() : x))) as Record<string, unknown>;
+  const bigintSafe = (v: Record<string, unknown>) =>
+    JSON.parse(JSON.stringify(v, (_k, x: unknown) => (typeof x === 'bigint' ? x.toString() : x))) as Record<
+      string,
+      unknown
+    >;
 
   // ---- Reads ----
   app.get('/status', async () => deps.queries.status());
@@ -222,81 +276,149 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
   });
 
   // ---- Controls ----
-  app.post('/control/start', mutation('/control/start', StartRequest, anyRole, async (body, role) => {
-    const officer = await officerFor();
-    const r = await officer.start(body.preset, role);
-    if (!r.ok) return refused(r.reason);
-    await deps.control.start(body.preset);
-    return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
-  }));
+  app.post(
+    '/control/start',
+    mutation('/control/start', StartRequest, anyRole, async (body, role) => {
+      const officer = await officerFor();
+      const r = await officer.start(body.preset, role);
+      if (!r.ok) return refused(r.reason);
+      await deps.control.start(body.preset);
+      return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
+    }),
+  );
 
-  app.post('/control/pause', mutation('/control/pause', null, anyRole, async (_b, role) => {
-    const officer = await officerFor();
-    const r = await officer.pause(role);
-    if (!r.ok) return refused(r.reason);
-    await deps.control.pause();
-    return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
-  }));
+  app.post(
+    '/control/pause',
+    mutation('/control/pause', null, anyRole, async (_b, role) => {
+      const officer = await officerFor();
+      const r = await officer.pause(role);
+      if (!r.ok) return refused(r.reason);
+      await deps.control.pause();
+      return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
+    }),
+  );
 
-  app.post('/control/kill', mutation('/control/kill', KillRequest, anyRole, async (_b, role) => {
-    const officer = await officerFor();
-    const r = await officer.killSwitch(role);
-    try {
-      await deps.control.killSwitch();
-    } catch {
-      // The ledger is halted and positions are marked closing; the Trader failed to acknowledge.
-      throw new HttpError(502, 'kill switch recorded but the trader did not acknowledge; positions are marked for sale');
-    }
-    return { status: 200, body: { ok: true, positionsClosing: r.positionsClosing, reservationsReleased: r.reservationsReleased } };
-  }));
+  app.post(
+    '/control/kill',
+    mutation('/control/kill', KillRequest, anyRole, async (_b, role) => {
+      const officer = await officerFor();
+      const r = await officer.killSwitch(role);
+      try {
+        await deps.control.killSwitch();
+      } catch {
+        // The ledger is halted and positions are marked closing; the Trader failed to acknowledge.
+        throw new HttpError(
+          502,
+          'kill switch recorded but the trader did not acknowledge; positions are marked for sale',
+        );
+      }
+      return {
+        status: 200,
+        body: { ok: true, positionsClosing: r.positionsClosing, reservationsReleased: r.reservationsReleased },
+      };
+    }),
+  );
 
-  app.post('/control/mode', mutation('/control/mode', ModeRequest, (role, body) => body.mode === 'paper' || role === 'owner', async (body, role) => {
-    const officer = await officerFor();
-    const r = await officer.setMode(body.mode, body.confirm, role);
-    if (!r.ok) return refused(r.reason);
-    if (deps.onModeChange) await deps.onModeChange(r.mode);
-    return { status: 200, body: { ok: true, mode: r.mode } };
-  }));
+  app.post(
+    '/control/mode',
+    mutation(
+      '/control/mode',
+      ModeRequest,
+      (role, body) => body.mode === 'paper' || role === 'owner',
+      async (body, role) => {
+        const officer = await officerFor();
+        const r = await officer.setMode(body.mode, body.confirm, role);
+        if (!r.ok) return refused(r.reason);
+        if (deps.onModeChange) await deps.onModeChange(r.mode);
+        return { status: 200, body: { ok: true, mode: r.mode } };
+      },
+    ),
+  );
 
-  app.post('/control/clear-halt', mutation('/control/clear-halt', ClearHaltRequest, (role) => role === 'operator', async (body, role) => {
-    const officer = await officerFor();
-    const r = await officer.clearHalt(body.reason, role);
-    if (!r.ok) return refused(r.reason);
-    return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
-  }));
+  app.post(
+    '/control/clear-halt',
+    mutation(
+      '/control/clear-halt',
+      ClearHaltRequest,
+      (role) => role === 'operator',
+      async (body, role) => {
+        const officer = await officerFor();
+        const r = await officer.clearHalt(body.reason, role);
+        if (!r.ok) return refused(r.reason);
+        return { status: 200, body: { ok: true, state: r.state, haltReason: r.haltReason } };
+      },
+    ),
+  );
 
   // ---- Wallet (owner only) ----
-  app.post('/wallet/withdraw-address', mutation('/wallet/withdraw-address', WithdrawAddressRequest, (role) => role === 'owner', async (body, role) => {
-    const officer = await officerFor();
-    try {
-      const r = await officer.setWithdrawAddress(body.address, role);
-      return { status: 200, body: { ok: true, status: r.status, address: r.address, effectiveAt: r.effectiveAt.toISOString() } };
-    } catch (err) {
-      if ((err as Error).name === 'RiskError') throw new HttpError(400, 'invalid address');
-      throw err;
-    }
-  }));
+  app.post(
+    '/wallet/withdraw-address',
+    mutation(
+      '/wallet/withdraw-address',
+      WithdrawAddressRequest,
+      (role) => role === 'owner',
+      async (body, role) => {
+        const officer = await officerFor();
+        try {
+          const r = await officer.setWithdrawAddress(body.address, role);
+          return {
+            status: 200,
+            body: { ok: true, status: r.status, address: r.address, effectiveAt: r.effectiveAt.toISOString() },
+          };
+        } catch (err) {
+          if ((err as Error).name === 'RiskError') throw new HttpError(400, 'invalid address');
+          throw err;
+        }
+      },
+    ),
+  );
 
-  app.post('/wallet/withdraw', mutation('/wallet/withdraw', WithdrawRequest, (role) => role === 'owner', async (body, role) => {
-    const lamports = BigInt(body.lamports);
-    if (lamports <= 0n) throw new HttpError(400, 'invalid request: lamports must be positive');
-    const officer = await officerFor();
-    const r = await officer.requestWithdrawal(lamports, role);
-    if (!r.ok) return refused(r.reason);
-    // The ticket goes to the signer path, never back to the dashboard.
-    let submitted = false;
-    if (r.ticket !== null && deps.submitWithdrawal) {
-      deps.submitWithdrawal({ withdrawalId: r.withdrawalId, lamports: r.lamports, destination: r.destination, ticket: r.ticket });
-      submitted = true;
-    }
-    return { status: 200, body: bigintSafe({ ok: true, withdrawalId: r.withdrawalId, lamports: r.lamports, destination: r.destination, requiresSigner: r.ticket !== null, submitted }) };
-  }));
+  app.post(
+    '/wallet/withdraw',
+    mutation(
+      '/wallet/withdraw',
+      WithdrawRequest,
+      (role) => role === 'owner',
+      async (body, role) => {
+        const lamports = BigInt(body.lamports);
+        if (lamports <= 0n) throw new HttpError(400, 'invalid request: lamports must be positive');
+        const officer = await officerFor();
+        const r = await officer.requestWithdrawal(lamports, role);
+        if (!r.ok) return refused(r.reason);
+        // The ticket goes to the signer path, never back to the dashboard.
+        let submitted = false;
+        if (r.ticket !== null && deps.submitWithdrawal) {
+          deps.submitWithdrawal({
+            withdrawalId: r.withdrawalId,
+            lamports: r.lamports,
+            destination: r.destination,
+            ticket: r.ticket,
+          });
+          submitted = true;
+        }
+        return {
+          status: 200,
+          body: bigintSafe({
+            ok: true,
+            withdrawalId: r.withdrawalId,
+            lamports: r.lamports,
+            destination: r.destination,
+            requiresSigner: r.ticket !== null,
+            submitted,
+          }),
+        };
+      },
+    ),
+  );
 
   return app;
 }
 
 /** Binds the API to a loopback address only. */
-export async function listenControlApi(app: FastifyInstance, cfg: { api: { host: string; port: number } }): Promise<string> {
+export async function listenControlApi(
+  app: FastifyInstance,
+  cfg: { api: { host: string; port: number } },
+): Promise<string> {
   const host = cfg.api.host === 'localhost' ? '127.0.0.1' : cfg.api.host;
   if (host !== '127.0.0.1' && host !== '::1') throw new Error('control API must bind to a loopback address');
   return app.listen({ host, port: cfg.api.port });

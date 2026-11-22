@@ -19,7 +19,9 @@ describe('signer state', () => {
     const again = SignerStateStore.open(path, T0);
     expect(again.isTicketUsed('r1')).toBe(true);
     expect(again.spentOn(T0)).toBe(12n);
-    expect(() => again.commit({ reservationId: 'r1', ticketExpiresAt: T0 + 60_000, amountLamports: 1n, nowMs: T0 })).toThrow(/already used/);
+    expect(() =>
+      again.commit({ reservationId: 'r1', ticketExpiresAt: T0 + 60_000, amountLamports: 1n, nowMs: T0 }),
+    ).toThrow(/already used/);
   });
 
   it('resets the spend total on a new UTC day and prunes expired tickets', () => {
@@ -43,7 +45,12 @@ describe('signer state', () => {
     expect(s.isTicketUsed('r1')).toBe(true);
     expect(SignerStateStore.open(path, T0).isTicketUsed('r1')).toBe(true);
     // Once the grace period has passed, it is pruned.
-    s.commit({ reservationId: 'r3', ticketExpiresAt: T0 + 2 * PRUNE_GRACE_MS, amountLamports: 1n, nowMs: T0 + 1_001 + PRUNE_GRACE_MS });
+    s.commit({
+      reservationId: 'r3',
+      ticketExpiresAt: T0 + 2 * PRUNE_GRACE_MS,
+      amountLamports: 1n,
+      nowMs: T0 + 1_001 + PRUNE_GRACE_MS,
+    });
     expect(s.isTicketUsed('r1')).toBe(false);
   });
 
@@ -63,7 +70,8 @@ describe('signer state', () => {
   it('leaves no temporary files behind after commits', () => {
     const sub = mkdtempSync(join(dir, 'tmpcheck-'));
     const s = SignerStateStore.open(join(sub, 'state.json'), T0);
-    for (let i = 0; i < 5; i++) s.commit({ reservationId: `t${i}`, ticketExpiresAt: T0 + 60_000, amountLamports: 1n, nowMs: T0 });
+    for (let i = 0; i < 5; i++)
+      s.commit({ reservationId: `t${i}`, ticketExpiresAt: T0 + 60_000, amountLamports: 1n, nowMs: T0 });
     expect(readdirSync(sub)).toEqual(['state.json']);
   });
 
@@ -80,11 +88,18 @@ describe('signer state', () => {
     writeFileSync(corrupt, '{not json', { mode: 0o600 });
     expect(() => SignerStateStore.open(corrupt, T0)).toThrow(/refusing to start/);
     const wrongShape = join(dir, 'shape.json');
-    writeFileSync(wrongShape, JSON.stringify({ version: 1, usedTickets: [], daily: { day: 'x', spentLamports: '-1' } }), { mode: 0o600 });
+    writeFileSync(
+      wrongShape,
+      JSON.stringify({ version: 1, usedTickets: [], daily: { day: 'x', spentLamports: '-1' } }),
+      { mode: 0o600 },
+    );
     expect(() => SignerStateStore.open(wrongShape, T0)).toThrow(/invalid format/);
     if (process.platform !== 'win32') {
       const open = join(dir, 'open.json');
-      writeFileSync(open, JSON.stringify({ version: 1, usedTickets: [], daily: { day: '2026-11-22', spentLamports: '0' } }));
+      writeFileSync(
+        open,
+        JSON.stringify({ version: 1, usedTickets: [], daily: { day: '2026-11-22', spentLamports: '0' } }),
+      );
       chmodSync(open, 0o666);
       expect(() => SignerStateStore.open(open, T0)).toThrow(/writable by group or other/);
     }

@@ -42,11 +42,23 @@ export const pairSchema = z.object({
   url: z.string().optional().nullable(),
   pairAddress: z.string(),
   labels: z.array(z.string()).optional().nullable(),
-  baseToken: z.object({ address: z.string(), name: z.string().optional().nullable(), symbol: z.string().optional().nullable() }),
+  baseToken: z.object({
+    address: z.string(),
+    name: z.string().optional().nullable(),
+    symbol: z.string().optional().nullable(),
+  }),
   quoteToken: z.object({ address: z.string(), symbol: z.string().optional().nullable() }).optional().nullable(),
   priceNative: optNum,
   priceUsd: optNum,
-  txns: z.object({ m5: txnSchema.optional().nullable(), h1: txnSchema.optional().nullable(), h24: txnSchema.optional().nullable() }).partial().optional().nullable(),
+  txns: z
+    .object({
+      m5: txnSchema.optional().nullable(),
+      h1: txnSchema.optional().nullable(),
+      h24: txnSchema.optional().nullable(),
+    })
+    .partial()
+    .optional()
+    .nullable(),
   volume: z.object({ m5: optNum, h1: optNum, h6: optNum, h24: optNum }).partial().optional().nullable(),
   priceChange: z.object({ m5: optNum, h1: optNum, h6: optNum, h24: optNum }).partial().optional().nullable(),
   liquidity: z.object({ usd: optNum, base: optNum, quote: optNum }).partial().optional().nullable(),
@@ -55,9 +67,19 @@ export const pairSchema = z.object({
   pairCreatedAt: optNum,
   info: z
     .object({
-      websites: z.array(z.object({ url: z.string().optional().nullable(), label: z.string().optional().nullable() })).optional().nullable(),
+      websites: z
+        .array(z.object({ url: z.string().optional().nullable(), label: z.string().optional().nullable() }))
+        .optional()
+        .nullable(),
       socials: z
-        .array(z.object({ platform: z.string().optional().nullable(), type: z.string().optional().nullable(), handle: z.string().optional().nullable(), url: z.string().optional().nullable() }))
+        .array(
+          z.object({
+            platform: z.string().optional().nullable(),
+            type: z.string().optional().nullable(),
+            handle: z.string().optional().nullable(),
+            url: z.string().optional().nullable(),
+          }),
+        )
         .optional()
         .nullable(),
     })
@@ -75,7 +97,10 @@ export interface ParseStats {
 }
 
 /** Normalizes a list endpoint body (array, or a single object) and validates each record. */
-export function parseRecords<T>(body: unknown, schema: z.ZodType<T, z.ZodTypeDef, unknown>): { records: T[]; stats: ParseStats } {
+export function parseRecords<T>(
+  body: unknown,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+): { records: T[]; stats: ParseStats } {
   const list = Array.isArray(body) ? body : body && typeof body === 'object' ? [body] : [];
   const records: T[] = [];
   let skipped = 0;
@@ -87,7 +112,7 @@ export function parseRecords<T>(body: unknown, schema: z.ZodType<T, z.ZodTypeDef
   return { records, stats: { ok: records.length, skipped } };
 }
 
-function cleanLinks(links: Array<z.infer<typeof linkSchema>> | null | undefined): Array<{ type: string; url: string }> {
+function cleanLinks(links: z.infer<typeof linkSchema>[] | null | undefined): { type: string; url: string }[] {
   return (links ?? [])
     .slice(0, 10)
     .map((l) => ({ type: sanitizeText(l.type ?? l.label ?? 'website', 32), url: sanitizeText(l.url ?? '', 256) }))
@@ -251,7 +276,9 @@ export class DexScreenerCollector implements Collector {
         }
         busy = true;
         const p = fn()
-          .catch((e) => this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'dexscreener poll failed'))
+          .catch((e: unknown) =>
+            this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'dexscreener poll failed'),
+          )
           .finally(() => {
             busy = false;
           });
@@ -281,7 +308,9 @@ export class DexScreenerCollector implements Collector {
 
   async pollProfilesAndBoosts(): Promise<void> {
     const observedAt = this.now();
-    const profiles = await this.http.rawJson(`${this.baseUrl}/token-profiles/latest/v1`, { limiter: this.profileLimiter });
+    const profiles = await this.http.rawJson(`${this.baseUrl}/token-profiles/latest/v1`, {
+      limiter: this.profileLimiter,
+    });
     const pr = parseRecords(profiles, profileSchema);
     this.count('records_skipped', pr.stats.skipped);
     for (const p of pr.records) {
@@ -302,7 +331,8 @@ export class DexScreenerCollector implements Collector {
     const mints = [...new Set(this.opts.watched().filter(isMintAddress))];
     if (mints.length === 0) return;
     const chunks: string[][] = [];
-    for (let i = 0; i < mints.length; i += DEX_MAX_ADDRESSES_PER_CALL) chunks.push(mints.slice(i, i + DEX_MAX_ADDRESSES_PER_CALL));
+    for (let i = 0; i < mints.length; i += DEX_MAX_ADDRESSES_PER_CALL)
+      chunks.push(mints.slice(i, i + DEX_MAX_ADDRESSES_PER_CALL));
     const maxCalls = Math.max(1, this.opts.maxPairCallsPerTick ?? 4);
     for (let k = 0; k < Math.min(maxCalls, chunks.length); k++) {
       if (this.stopped) return;

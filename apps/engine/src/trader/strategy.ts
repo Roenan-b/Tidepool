@@ -6,7 +6,15 @@
  * Every decision carries a reason string that goes into logs, the audit trail and order records.
  */
 import { createHash } from 'node:crypto';
-import { bpsOf, minBig, simulateSell, type Candidate, type CostModel, type Preset, type StrategyParams } from '@tidepool/core';
+import {
+  bpsOf,
+  minBig,
+  simulateSell,
+  type Candidate,
+  type CostModel,
+  type Preset,
+  type StrategyParams,
+} from '@tidepool/core';
 
 export const STRATEGY_NAME = 'momentum-v1';
 /** Bump on any change to the rules in this file. Stamped on every order and position via configVersion(). */
@@ -46,19 +54,32 @@ export function validateParams(p: MomentumParams): void {
   if (!finitePos(p.takeProfitPct)) throw new RangeError('takeProfitPct must be positive');
   if (!finitePos(p.stopLossPct) || p.stopLossPct >= 100) throw new RangeError('stopLossPct must be in (0, 100)');
   if (!finitePos(p.timeStopSeconds)) throw new RangeError('timeStopSeconds must be positive');
-  if (!Number.isFinite(p.minScore) || p.minScore < 0 || p.minScore > 100) throw new RangeError('minScore must be in [0, 100]');
+  if (!Number.isFinite(p.minScore) || p.minScore < 0 || p.minScore > 100)
+    throw new RangeError('minScore must be in [0, 100]');
   if (!finitePos(p.maxPriceImpactPct)) throw new RangeError('maxPriceImpactPct must be positive');
-  if (!Number.isInteger(p.slippageBps) || p.slippageBps < 0 || p.slippageBps > 5_000) throw new RangeError('slippageBps out of range');
-  if (!Number.isInteger(p.maxPositionBps) || p.maxPositionBps <= 0 || p.maxPositionBps > 10_000) throw new RangeError('maxPositionBps out of range');
-  if (!(p.maxPositionShareOfLiquidity > 0 && p.maxPositionShareOfLiquidity <= 1)) throw new RangeError('maxPositionShareOfLiquidity out of range');
+  if (!Number.isInteger(p.slippageBps) || p.slippageBps < 0 || p.slippageBps > 5_000)
+    throw new RangeError('slippageBps out of range');
+  if (!Number.isInteger(p.maxPositionBps) || p.maxPositionBps <= 0 || p.maxPositionBps > 10_000)
+    throw new RangeError('maxPositionBps out of range');
+  if (!(p.maxPositionShareOfLiquidity > 0 && p.maxPositionShareOfLiquidity <= 1))
+    throw new RangeError('maxPositionShareOfLiquidity out of range');
   if (p.tipLamports < 0n || p.minPositionLamports < 0n) throw new RangeError('lamport params must be non-negative');
 }
 
 /** Stable identifier of the exact rules plus parameters that produced a trade. */
 export function configVersion(presetName: string, p: MomentumParams): string {
   const canonical = JSON.stringify([
-    p.name, p.minScore, p.takeProfitPct, p.stopLossPct, p.timeStopSeconds, p.slippageBps, p.tipLamports.toString(),
-    p.maxPriceImpactPct, p.minPositionLamports.toString(), p.maxPositionBps, p.maxPositionShareOfLiquidity,
+    p.name,
+    p.minScore,
+    p.takeProfitPct,
+    p.stopLossPct,
+    p.timeStopSeconds,
+    p.slippageBps,
+    p.tipLamports.toString(),
+    p.maxPriceImpactPct,
+    p.minPositionLamports.toString(),
+    p.maxPositionBps,
+    p.maxPositionShareOfLiquidity,
   ]);
   const h = createHash('sha256').update(canonical).digest('hex').slice(0, 12);
   return `${STRATEGY_VERSION}/${presetName}/${h}`;
@@ -81,7 +102,9 @@ export function screenCandidate(c: Candidate, now: Date, p: MomentumParams): Dec
 
 /** Liquidity used for sizing: the lower of the two reported values, so a stale high reading never inflates size. */
 export function candidateLiquidityUsd(c: Candidate): number {
-  const vals = [c.features?.liquidityUsd, c.safety?.liquidityUsd].filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0);
+  const vals = [c.features?.liquidityUsd, c.safety?.liquidityUsd].filter(
+    (v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+  );
   return vals.length ? Math.min(...vals) : 0;
 }
 
@@ -97,8 +120,7 @@ export interface SizingInput {
 }
 
 export type SizeDecision =
-  | { ok: true; lamports: bigint; positionShareOfLiquidity: number; reason: string }
-  | { ok: false; reason: string };
+  { ok: true; lamports: bigint; positionShareOfLiquidity: number; reason: string } | { ok: false; reason: string };
 
 /** size = min(maxPositionBps of equity, maxPositionShareOfLiquidity of liquidity, maxPositionLamports). */
 export function sizeEntry(s: SizingInput, p: MomentumParams): SizeDecision {
@@ -119,11 +141,16 @@ export function sizeEntry(s: SizingInput, p: MomentumParams): SizeDecision {
   return { ok: true, lamports, positionShareOfLiquidity: share, reason: `size ${lamports} by ${capBy}` };
 }
 
-export interface EntryQuote { routeOk: boolean; priceImpactPct: number; priceLamportsPerUnit: number }
+export interface EntryQuote {
+  routeOk: boolean;
+  priceImpactPct: number;
+  priceLamportsPerUnit: number;
+}
 
 export function evaluateEntryQuote(q: EntryQuote, p: MomentumParams): Decision {
   if (!q.routeOk) return { ok: false, reason: 'no route' };
-  if (!(q.priceLamportsPerUnit > 0) || !Number.isFinite(q.priceLamportsPerUnit)) return { ok: false, reason: 'invalid quote price' };
+  if (!(q.priceLamportsPerUnit > 0) || !Number.isFinite(q.priceLamportsPerUnit))
+    return { ok: false, reason: 'invalid quote price' };
   if (!Number.isFinite(q.priceImpactPct) || q.priceImpactPct < 0) return { ok: false, reason: 'invalid price impact' };
   if (q.priceImpactPct >= p.maxPriceImpactPct) {
     return { ok: false, reason: `price impact ${q.priceImpactPct.toFixed(3)}% >= cap ${p.maxPriceImpactPct}%` };
@@ -136,14 +163,25 @@ export type EntryDecision =
   | { enter: false; reason: string };
 
 /** Full entry decision. The caller supplies sizing inputs and a buy quote for the sized amount. */
-export function decideEntry(args: { candidate: Candidate; now: Date; params: MomentumParams; sizing: SizingInput; quote: EntryQuote }): EntryDecision {
+export function decideEntry(args: {
+  candidate: Candidate;
+  now: Date;
+  params: MomentumParams;
+  sizing: SizingInput;
+  quote: EntryQuote;
+}): EntryDecision {
   const s = screenCandidate(args.candidate, args.now, args.params);
   if (!s.ok) return { enter: false, reason: s.reason };
   const z = sizeEntry(args.sizing, args.params);
   if (!z.ok) return { enter: false, reason: z.reason };
   const q = evaluateEntryQuote(args.quote, args.params);
   if (!q.ok) return { enter: false, reason: q.reason };
-  return { enter: true, lamports: z.lamports, positionShareOfLiquidity: z.positionShareOfLiquidity, reason: `${s.reason}; ${z.reason}; ${q.reason}` };
+  return {
+    enter: true,
+    lamports: z.lamports,
+    positionShareOfLiquidity: z.positionShareOfLiquidity,
+    reason: `${s.reason}; ${z.reason}; ${q.reason}`,
+  };
 }
 
 /** The cost model with the tip the strategy actually pays. */
@@ -165,7 +203,9 @@ export function estimateExitNetLamports(tokenAmount: bigint, priceLamportsPerUni
 export type ExitReason = 'take_profit' | 'stop_loss' | 'time_stop' | 'kill_switch';
 export type ExitDecision = { exit: true; reason: ExitReason; detail: string } | { exit: false; detail: string };
 
-function pctToBps(pct: number): bigint { return BigInt(Math.round(pct * 100)); }
+function pctToBps(pct: number): bigint {
+  return BigInt(Math.round(pct * 100));
+}
 
 /**
  * Exit rules on marked value net of estimated exit costs, compared with the SOL actually spent on entry.
@@ -193,13 +233,21 @@ export function decideExit(args: {
       return { exit: true, reason: 'take_profit', detail: `${pnl} >= +${p.takeProfitPct}%` };
     }
     if (ageMs >= p.timeStopSeconds * 1000) {
-      return { exit: true, reason: 'time_stop', detail: `held ${Math.floor(ageMs / 1000)}s >= ${p.timeStopSeconds}s; ${pnl}` };
+      return {
+        exit: true,
+        reason: 'time_stop',
+        detail: `held ${Math.floor(ageMs / 1000)}s >= ${p.timeStopSeconds}s; ${pnl}`,
+      };
     }
     return { exit: false, detail: `hold: ${pnl}` };
   }
   // No usable mark: only the time-stop can fire, so a position is never held indefinitely.
   if (ageMs >= p.timeStopSeconds * 1000) {
-    return { exit: true, reason: 'time_stop', detail: `held ${Math.floor(ageMs / 1000)}s >= ${p.timeStopSeconds}s; no mark` };
+    return {
+      exit: true,
+      reason: 'time_stop',
+      detail: `held ${Math.floor(ageMs / 1000)}s >= ${p.timeStopSeconds}s; no mark`,
+    };
   }
   return { exit: false, detail: 'hold: no mark' };
 }
@@ -211,6 +259,8 @@ export function decideExit(args: {
 export function entryIdempotencyKey(strategy: string, mint: string, observedAt: string): string {
   const t = Date.parse(observedAt);
   if (!Number.isFinite(t)) throw new RangeError('observedAt unparseable');
-  const digest = createHash('sha256').update(JSON.stringify([strategy, mint, new Date(t).toISOString()])).digest('hex');
+  const digest = createHash('sha256')
+    .update(JSON.stringify([strategy, mint, new Date(t).toISOString()]))
+    .digest('hex');
   return `entry:${strategy}:${digest.slice(0, 40)}`;
 }

@@ -17,10 +17,14 @@ export function bpsOf(amount: bigint, bps: number): bigint {
   return (amount * BigInt(bps)) / 10_000n;
 }
 
-export function minBig(a: bigint, b: bigint): bigint { return a < b ? a : b; }
-export function maxBig(a: bigint, b: bigint): bigint { return a > b ? a : b; }
+export function minBig(a: bigint, b: bigint): bigint {
+  return a < b ? a : b;
+}
+export function maxBig(a: bigint, b: bigint): bigint {
+  return a > b ? a : b;
+}
 
 /** JSON-safe serialization of bigint fields as decimal strings. */
-export function toJsonSafe<T>(value: T): unknown {
-  return JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+export function toJsonSafe(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))) as unknown;
 }

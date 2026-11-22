@@ -23,7 +23,10 @@ export class SolPriceFeed {
   private fetchedAt = 0;
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(private readonly client: Pick<JupiterClient, 'quote'>, private readonly opts: { intervalMs?: number; maxAgeMs?: number; onError?: (e: unknown) => void } = {}) {}
+  constructor(
+    private readonly client: Pick<JupiterClient, 'quote'>,
+    private readonly opts: { intervalMs?: number; maxAgeMs?: number; onError?: (e: unknown) => void } = {},
+  ) {}
 
   get(): number | null {
     const maxAge = this.opts.maxAgeMs ?? 5 * 60_000;
@@ -32,7 +35,12 @@ export class SolPriceFeed {
 
   async refresh(): Promise<void> {
     try {
-      const q = await this.client.quote({ inputMint: SOL_MINT, outputMint: USDC_MINT, amount: 1_000_000_000n, slippageBps: 50 });
+      const q = await this.client.quote({
+        inputMint: SOL_MINT,
+        outputMint: USDC_MINT,
+        amount: 1_000_000_000n,
+        slippageBps: 50,
+      });
       const usd = Number(BigInt(q.outAmount)) / 1e6;
       if (Number.isFinite(usd) && usd > 1 && usd < 100_000) {
         this.price = usd;
@@ -58,7 +66,7 @@ export class SolPriceFeed {
 
 /** Tracks success and failure of RPC calls for the ops view and the circuit breaker. */
 export class RpcHealthTracker {
-  private events: Array<{ at: number; ok: boolean }> = [];
+  private events: { at: number; ok: boolean }[] = [];
   private lastOk: number | null = null;
 
   record(ok: boolean): void {
@@ -74,7 +82,11 @@ export class RpcHealthTracker {
     const errors = this.events.filter((e) => !e.ok).length;
     const errorRate = n === 0 ? 0 : errors / n;
     const recentOk = this.lastOk !== null && Date.now() - this.lastOk < 2 * 60_000;
-    return { healthy: recentOk && errorRate < 0.5, lastOkAt: this.lastOk ? new Date(this.lastOk).toISOString() : null, errorRate };
+    return {
+      healthy: recentOk && errorRate < 0.5,
+      lastOkAt: this.lastOk ? new Date(this.lastOk).toISOString() : null,
+      errorRate,
+    };
   }
 }
 

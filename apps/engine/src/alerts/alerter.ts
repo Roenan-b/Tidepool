@@ -25,7 +25,7 @@ export interface Alert {
 
 export interface DailySummary {
   mode: TradingMode;
-  date: string;                 // UTC YYYY-MM-DD
+  date: string; // UTC YYYY-MM-DD
   equityLamports: bigint;
   startOfDayEquityLamports: bigint;
   netPnlLamports: bigint;
@@ -44,8 +44,12 @@ export interface Alerter {
 }
 
 export class NullAlerter implements Alerter {
-  async notify(): Promise<void> {}
-  async dailySummary(): Promise<void> {}
+  async notify(): Promise<void> {
+    // Alerts are disabled: nothing to send.
+  }
+  async dailySummary(): Promise<void> {
+    // Alerts are disabled: nothing to send.
+  }
 }
 
 /** Collects alerts in memory; useful in tests and for a dashboard "recent alerts" panel. */
@@ -116,7 +120,8 @@ export class TelegramAlerter implements Alerter {
 
   constructor(opts: TelegramAlerterOptions) {
     if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test(opts.botToken)) throw new Error('telegram bot token has an unexpected format');
-    if (!/^-?\d{1,20}$|^@[A-Za-z0-9_]{5,64}$/.test(opts.chatId)) throw new Error('telegram chat id has an unexpected format');
+    if (!/^-?\d{1,20}$|^@[A-Za-z0-9_]{5,64}$/.test(opts.chatId))
+      throw new Error('telegram chat id has an unexpected format');
     const base = (opts.apiBase ?? 'https://api.telegram.org').replace(/\/+$/, '');
     this.url = `${base}/bot${opts.botToken}/sendMessage`;
     this.chatId = opts.chatId;
@@ -145,7 +150,11 @@ export class TelegramAlerter implements Alerter {
       const res = await this.fetchImpl(this.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chat_id: this.chatId, text: text.slice(0, TELEGRAM_MAX_TEXT), disable_web_page_preview: true }),
+        body: JSON.stringify({
+          chat_id: this.chatId,
+          text: text.slice(0, TELEGRAM_MAX_TEXT),
+          disable_web_page_preview: true,
+        }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!res.ok) this.logger?.warn({ status: res.status }, 'telegram sendMessage failed');
@@ -158,7 +167,14 @@ export class TelegramAlerter implements Alerter {
 }
 
 /** Returns a TelegramAlerter when both token and chat id are configured, otherwise a NullAlerter. */
-export function createAlerter(cfg: { telegram: { botToken: string; chatId: string } | null }, logger?: Logger): Alerter {
+export function createAlerter(
+  cfg: { telegram: { botToken: string; chatId: string } | null },
+  logger?: Logger,
+): Alerter {
   if (!cfg.telegram) return new NullAlerter();
-  return new TelegramAlerter({ botToken: cfg.telegram.botToken, chatId: cfg.telegram.chatId, ...(logger ? { logger } : {}) });
+  return new TelegramAlerter({
+    botToken: cfg.telegram.botToken,
+    chatId: cfg.telegram.chatId,
+    ...(logger ? { logger } : {}),
+  });
 }

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { authorize, pageRedirect, type Viewer } from './guard.js';
-import { afterFailure, claimAttempt, isLocked, LOCKOUT_MS, MAX_FAILED_ATTEMPTS, minutesRemaining, releaseAttempt, settleFailure } from './lockout.js';
+import {
+  afterFailure,
+  claimAttempt,
+  isLocked,
+  LOCKOUT_MS,
+  MAX_FAILED_ATTEMPTS,
+  minutesRemaining,
+  releaseAttempt,
+  settleFailure,
+} from './lockout.js';
 import { checkSameOrigin } from './origin.js';
 
 const base: Viewer = { userId: 'u', username: 'x', role: 'owner', totpEnabled: true, demo: false };
@@ -53,7 +62,9 @@ describe('checkSameOrigin', () => {
     expect(checkSameOrigin({ origin: null, secFetchSite: null }, allowed).ok).toBe(false);
     expect(checkSameOrigin({ origin: 'null', secFetchSite: null }, allowed).ok).toBe(false);
     expect(checkSameOrigin({ origin: 'https://evil.test', secFetchSite: null }, allowed).ok).toBe(false);
-    expect(checkSameOrigin({ origin: 'https://dash.example.test.evil.test', secFetchSite: null }, allowed).ok).toBe(false);
+    expect(checkSameOrigin({ origin: 'https://dash.example.test.evil.test', secFetchSite: null }, allowed).ok).toBe(
+      false,
+    );
     expect(checkSameOrigin({ origin: 'http://dash.example.test', secFetchSite: null }, allowed).ok).toBe(false);
     expect(checkSameOrigin({ origin: 'https://dash.example.test:8443', secFetchSite: null }, allowed).ok).toBe(false);
   });
@@ -101,7 +112,10 @@ describe('lockout', () => {
     expect(c.allowed).toBe(true);
     s = settleFailure(c.state, now);
     expect(s).toEqual({ failedAttempts: 0, lockedUntil: new Date(now.getTime() + LOCKOUT_MS) });
-    expect(releaseAttempt({ failedAttempts: 3, lockedUntil: null }, now)).toEqual({ failedAttempts: 2, lockedUntil: null });
+    expect(releaseAttempt({ failedAttempts: 3, lockedUntil: null }, now)).toEqual({
+      failedAttempts: 2,
+      lockedUntil: null,
+    });
     expect(releaseAttempt(s, now)).toBe(s);
   });
 });

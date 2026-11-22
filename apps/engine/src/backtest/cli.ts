@@ -17,7 +17,13 @@ import { generateSyntheticFixture } from './fixtures.js';
 import { readJsonl, writeJsonl } from './io.js';
 import { runBacktest } from './replay.js';
 import { reportToJson, reportToMarkdown } from './report.js';
-import { looksSynthetic, PricePointSchema, SignalEventSchema, SolPricePointSchema, type BacktestInput } from './types.js';
+import {
+  looksSynthetic,
+  PricePointSchema,
+  SignalEventSchema,
+  SolPricePointSchema,
+  type BacktestInput,
+} from './types.js';
 import { walkForward } from './walkForward.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +54,10 @@ export async function main(argv: string[]): Promise<number> {
     },
     strict: true,
   });
-  if (values.help) { console.log(USAGE); return 0; }
+  if (values.help) {
+    console.log(USAGE);
+    return 0;
+  }
   const preset = values.preset as PresetName;
   if (!['conservative', 'balanced', 'aggressive'].includes(preset)) throw new Error(`unknown preset ${preset}`);
   const seed = Number(values.seed);
@@ -70,7 +79,10 @@ export async function main(argv: string[]): Promise<number> {
       console.log(`wrote synthetic fixture to ${dir}`);
     }
   } else {
-    if (!values.signals || !values.prices) { console.error(USAGE); return 2; }
+    if (!values.signals || !values.prices) {
+      console.error(USAGE);
+      return 2;
+    }
     input = {
       signals: await readJsonl(resolve(values.signals), SignalEventSchema),
       prices: await readJsonl(resolve(values.prices), PricePointSchema),
@@ -100,11 +112,15 @@ export async function main(argv: string[]): Promise<number> {
     const md = [
       reportToMarkdown(r.test, `Walk-forward test window (chosen params ${JSON.stringify(r.tune.chosen)})`),
       reportToMarkdown(r.baselineTest, 'Walk-forward test window (preset defaults, baseline)'),
-      `## Tuning (window ${r.tune.window.from} to ${r.tune.window.to}, latest input ${r.tune.maxInputAt}, split ${r.split})`,
+      `## Tuning (window ${String(r.tune.window.from)} to ${String(r.tune.window.to)}, latest input ${String(r.tune.maxInputAt)}, split ${r.split})`,
       '',
       r.tune.chosenFromGrid ? '' : 'No grid point reached the minimum trade count; preset defaults were used.',
-      '| Params | Trades | Net after costs (lamports) | Max DD % |', '| --- | --- | --- | --- |',
-      ...r.tune.results.map((x) => `| ${JSON.stringify(x.params)} | ${x.trades} | ${x.netAfterAllCostsLamports} | ${x.maxDrawdownPct.toFixed(2)} |`),
+      '| Params | Trades | Net after costs (lamports) | Max DD % |',
+      '| --- | --- | --- | --- |',
+      ...r.tune.results.map(
+        (x) =>
+          `| ${JSON.stringify(x.params)} | ${x.trades} | ${x.netAfterAllCostsLamports} | ${x.maxDrawdownPct.toFixed(2)} |`,
+      ),
       '',
     ].join('\n');
     await writeFile(join(outDir, `${prefix}.json`), reportToJson(r), 'utf8');
@@ -113,7 +129,9 @@ export async function main(argv: string[]): Promise<number> {
     const r = await runBacktest(input, base);
     await writeFile(join(outDir, `${prefix}.json`), reportToJson(r), 'utf8');
     await writeFile(join(outDir, `${prefix}.md`), reportToMarkdown(r), 'utf8');
-    console.log(`${synthetic ? '[SYNTHETIC] ' : ''}trades=${r.summary.trades} net=${r.summary.netAfterAllCostsLamports} lamports maxDD=${r.summary.maxDrawdownPct.toFixed(2)}%`);
+    console.log(
+      `${synthetic ? '[SYNTHETIC] ' : ''}trades=${r.summary.trades} net=${r.summary.netAfterAllCostsLamports} lamports maxDD=${r.summary.maxDrawdownPct.toFixed(2)}%`,
+    );
   }
   console.log(`wrote ${join(outDir, prefix)}.{json,md}`);
   return 0;
@@ -121,8 +139,13 @@ export async function main(argv: string[]): Promise<number> {
 
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
-  main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (err: unknown) => {
-    console.error(err instanceof Error ? err.message : String(err));
-    process.exitCode = 1;
-  });
+  main(process.argv.slice(2)).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    },
+  );
 }

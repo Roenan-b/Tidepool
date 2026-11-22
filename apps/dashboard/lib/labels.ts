@@ -2,9 +2,11 @@
 import type { EngineState, HaltReason, PresetName, TradingMode } from '@tidepool/core';
 
 export const HALT_REASON_TEXT: Record<HaltReason, string> = {
-  daily_loss_limit: "Today's losses reached the daily loss limit. New trades stay off until tomorrow (UTC) unless Roe reviews and clears it.",
+  daily_loss_limit:
+    "Today's losses reached the daily loss limit. New trades stay off until tomorrow (UTC) unless Roe reviews and clears it.",
   drawdown_limit: 'The pool fell too far below its best value. Trading stays off until Roe and Jake review it.',
-  reconciliation_mismatch: "The bot's books did not match the wallet balance on chain. Trading stopped so nothing is double counted.",
+  reconciliation_mismatch:
+    "The bot's books did not match the wallet balance on chain. Trading stopped so nothing is double counted.",
   landing_rate_collapse: 'Too many trades failed to land on the network, so the bot stopped to avoid wasting fees.',
   rpc_errors: 'The connection to the Solana network kept failing, so the bot stopped trading.',
   stale_data: 'Market data stopped updating, so the bot stopped rather than trade on old prices.',

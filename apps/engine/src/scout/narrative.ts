@@ -87,7 +87,10 @@ export function sanitizeNarrativeInput(input: NarrativeInput): NarrativeInput {
     name: sanitizeText(input.name, 64),
     symbol: sanitizeText(input.symbol, 16),
     description: sanitizeText(input.description, 1_000),
-    posts: input.posts.slice(0, 8).map((p) => sanitizeText(p, 280)).filter(Boolean),
+    posts: input.posts
+      .slice(0, 8)
+      .map((p) => sanitizeText(p, 280))
+      .filter(Boolean),
   };
   while (JSON.stringify(out).length > MAX_INPUT_CHARS && out.posts.length > 0) out.posts.pop();
   return out;
@@ -105,7 +108,7 @@ const SYSTEM_PROMPT = [
   '"summary": at most 280 characters of neutral description.',
 ].join('\n');
 
-export function buildMessages(input: NarrativeInput): Array<{ role: 'system' | 'user'; content: string }> {
+export function buildMessages(input: NarrativeInput): { role: 'system' | 'user'; content: string }[] {
   const data = sanitizeNarrativeInput(input);
   return [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -114,9 +117,7 @@ export function buildMessages(input: NarrativeInput): Array<{ role: 'system' | '
 }
 
 const completionSchema = z.object({
-  choices: z
-    .array(z.object({ message: z.object({ content: z.string().nullable().optional() }) }))
-    .min(1),
+  choices: z.array(z.object({ message: z.object({ content: z.string().nullable().optional() }) })).min(1),
 });
 
 const modelOutputSchema = z.object({
@@ -187,18 +188,34 @@ export class PgNarrativeStore implements NarrativeStore {
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
        ON CONFLICT (mint) DO UPDATE SET label = EXCLUDED.label, score = EXCLUDED.score, scam_flags = EXCLUDED.scam_flags,
          summary = EXCLUDED.summary, model = EXCLUDED.model, scored_at = EXCLUDED.scored_at`,
-      [pgSafeString(mint), r.label, clamp(r.score, 0, 1), toPgJson(r.scamFlags), pgSafeString(r.summary), sanitizeText(model, 100), at.toISOString()],
+      [
+        pgSafeString(mint),
+        r.label,
+        clamp(r.score, 0, 1),
+        toPgJson(r.scamFlags),
+        pgSafeString(r.summary),
+        sanitizeText(model, 100),
+        at.toISOString(),
+      ],
     );
   }
 
   async getMany(mints: string[]): Promise<Map<string, NarrativeEntry>> {
     const out = new Map<string, NarrativeEntry>();
     if (mints.length === 0) return out;
-    const { rows } = await this.db.query(`SELECT mint, label, score, scam_flags, scored_at FROM narrative_scores WHERE mint = ANY($1::text[])`, [mints]);
+    const { rows } = await this.db.query(
+      `SELECT mint, label, score, scam_flags, scored_at FROM narrative_scores WHERE mint = ANY($1::text[])`,
+      [mints],
+    );
     for (const row of rows) {
       const r = storedRowSchema.safeParse(row);
       if (!r.success) continue;
-      out.set(r.data.mint, { label: r.data.label, score: clamp(r.data.score, 0, 1), scamFlags: r.data.scam_flags, scoredAt: r.data.scored_at });
+      out.set(r.data.mint, {
+        label: r.data.label,
+        score: clamp(r.data.score, 0, 1),
+        scamFlags: r.data.scam_flags,
+        scoredAt: r.data.scored_at,
+      });
     }
     return out;
   }
@@ -207,7 +224,14 @@ export class PgNarrativeStore implements NarrativeStore {
 export class MemoryNarrativeStore implements NarrativeStore {
   readonly rows = new Map<string, NarrativeEntry & { summary: string; model: string }>();
   async upsert(mint: string, r: NarrativeResult, model: string, at: Date): Promise<void> {
-    this.rows.set(mint, { label: r.label, score: r.score, scamFlags: r.scamFlags, summary: r.summary, model, scoredAt: at });
+    this.rows.set(mint, {
+      label: r.label,
+      score: r.score,
+      scamFlags: r.scamFlags,
+      summary: r.summary,
+      model,
+      scoredAt: at,
+    });
   }
   async getMany(mints: string[]): Promise<Map<string, NarrativeEntry>> {
     const out = new Map<string, NarrativeEntry>();
@@ -258,7 +282,11 @@ export class NarrativeClassifier {
   constructor(private readonly opts: NarrativeClassifierOptions) {
     const c = opts.config;
     this.enabled = !!(c.apiUrl && c.apiKey && c.model);
-    if (this.enabled && !/^https:\/\//.test(c.apiUrl!) && !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(c.apiUrl!)) {
+    if (
+      this.enabled &&
+      !c.apiUrl!.startsWith('https://') &&
+      !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(c.apiUrl!)
+    ) {
       throw new Error('NARRATIVE_API_URL must be https (or a localhost endpoint)');
     }
     this.now = opts.now ?? (() => new Date());
@@ -284,7 +312,7 @@ export class NarrativeClassifier {
     this.queue.set(input.mint, input);
     const max = this.opts.maxQueue ?? 200;
     while (this.queue.size > max) {
-      const oldest = this.queue.keys().next().value as string;
+      const oldest = this.queue.keys().next().value!;
       this.queue.delete(oldest);
       this.opts.metrics?.inc('narrative.queue_dropped');
     }
@@ -324,7 +352,9 @@ export class NarrativeClassifier {
           stored++;
         }
       }
-    })().catch((e) => this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'narrative worker failed'));
+    })().catch((e: unknown) =>
+      this.logger.warn({ err: e instanceof Error ? e.message : 'unknown' }, 'narrative worker failed'),
+    );
     this.working = run.finally(() => {
       this.working = null;
     });
@@ -341,7 +371,7 @@ export class NarrativeClassifier {
     this.lastScored.delete(mint);
     this.lastScored.set(mint, now);
     // Hard ceiling in case the budget allows more calls per rescore interval than this.
-    while (this.lastScored.size > 20_000) this.lastScored.delete(this.lastScored.keys().next().value as string);
+    while (this.lastScored.size > 20_000) this.lastScored.delete(this.lastScored.keys().next().value!);
   }
 
   /** One classification call within budget. Returns null when disabled, over budget or the reply is invalid. */
@@ -364,7 +394,7 @@ export class NarrativeClassifier {
     try {
       const res = await this.http.json(this.opts.config.apiUrl!, completionSchema, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.config.apiKey}` },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${String(this.opts.config.apiKey)}` },
         body: JSON.stringify(body),
         // One budget unit pays for exactly one call, so the call is never retried.
         maxRetries: 0,

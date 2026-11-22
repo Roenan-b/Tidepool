@@ -18,7 +18,9 @@ export interface HolderCountProvider {
 const dasResponseSchema = z.object({
   result: z
     .object({
-      token_accounts: z.array(z.object({ owner: z.string(), amount: z.union([z.number(), z.string()]) }).passthrough()).default([]),
+      token_accounts: z
+        .array(z.object({ owner: z.string(), amount: z.union([z.number(), z.string()]) }).passthrough())
+        .default([]),
     })
     .optional()
     .nullable(),
@@ -38,7 +40,7 @@ export class HeliusDasHolderCounter implements HolderCountProvider {
   private readonly http: HttpClient;
   private readonly limiter: TokenBucket;
   constructor(private readonly opts: HeliusDasHolderCounterOptions) {
-    if (!/^https:\/\//.test(opts.rpcUrl)) throw new Error('holder counter RPC URL must be https');
+    if (!opts.rpcUrl.startsWith('https://')) throw new Error('holder counter RPC URL must be https');
     this.http = opts.http ?? new HttpClient({ maxRetries: 2 });
     // Free Helius plans allow 10 requests/second; stay well under it.
     this.limiter = opts.limiter ?? new TokenBucket(3, 3);
@@ -53,7 +55,12 @@ export class HeliusDasHolderCounter implements HolderCountProvider {
       const body = await this.http.json(this.opts.rpcUrl, dasResponseSchema, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: `holders-${page}`, method: 'getTokenAccounts', params: { mint, page, limit } }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: `holders-${page}`,
+          method: 'getTokenAccounts',
+          params: { mint, page, limit },
+        }),
         limiter: this.limiter,
       });
       if (body.error || !body.result) return null;
@@ -118,7 +125,13 @@ export class HolderStatsCollector implements Collector {
       try {
         const r = await this.opts.provider.holderCount(mint);
         if (!r) continue;
-        this.opts.sink.emit({ source: 'holders', mint, kind: SignalKinds.holderSnapshot, observedAt: this.now(), payload: { holderCount: r.count, capped: r.capped } });
+        this.opts.sink.emit({
+          source: 'holders',
+          mint,
+          kind: SignalKinds.holderSnapshot,
+          observedAt: this.now(),
+          payload: { holderCount: r.count, capped: r.capped },
+        });
       } catch (e) {
         this.opts.metrics?.inc('holders.errors');
         this.logger.debug({ err: e instanceof Error ? e.message : 'unknown' }, 'holder count failed');

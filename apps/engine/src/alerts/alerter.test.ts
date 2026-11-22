@@ -4,17 +4,29 @@ import { createLogger } from '../log.js';
 import { NullAlerter, TelegramAlerter, createAlerter, formatDailySummary, type Alert } from './alerter.js';
 
 const TOKEN = '123456789:AAEexampleexampleexampleexample_123';
-const alert: Alert = { kind: 'halt', severity: 'critical', mode: 'paper', title: 'Trading halted: drawdown_limit', body: 'details', haltReason: 'drawdown_limit' };
+const alert: Alert = {
+  kind: 'halt',
+  severity: 'critical',
+  mode: 'paper',
+  title: 'Trading halted: drawdown_limit',
+  body: 'details',
+  haltReason: 'drawdown_limit',
+};
 
 function captureLogger() {
   const lines: string[] = [];
-  const dest = new Writable({ write(chunk, _enc, cb) { lines.push(String(chunk)); cb(); } });
+  const dest = new Writable({
+    write(chunk, _enc, cb) {
+      lines.push(String(chunk));
+      cb();
+    },
+  });
   return { logger: createLogger({ level: 'debug', destination: dest }), lines };
 }
 
 describe('TelegramAlerter', () => {
   it('posts plain text to sendMessage', async () => {
-    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const calls: { url: string; init: RequestInit }[] = [];
     const fetchImpl = (async (url: string, init: RequestInit) => {
       calls.push({ url, init });
       return new Response('{"ok":true}', { status: 200 });
@@ -32,12 +44,19 @@ describe('TelegramAlerter', () => {
 
   it('never throws and never logs the token on failure or timeout', async () => {
     const { logger, lines } = captureLogger();
-    const failing = (async () => { throw new TypeError(`fetch failed for https://api.telegram.org/bot${TOKEN}/sendMessage`); }) as unknown as typeof fetch;
+    const failing = (async () => {
+      throw new TypeError(`fetch failed for https://api.telegram.org/bot${TOKEN}/sendMessage`);
+    }) as unknown as typeof fetch;
     await new TelegramAlerter({ botToken: TOKEN, chatId: '1', fetchImpl: failing, logger }).notify(alert);
     const non200 = (async () => new Response('bad', { status: 401 })) as unknown as typeof fetch;
     await new TelegramAlerter({ botToken: TOKEN, chatId: '1', fetchImpl: non200, logger }).notify(alert);
-    const hanging = ((_u: string, init: RequestInit) => new Promise((_r, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('timed out', 'TimeoutError'))))) as unknown as typeof fetch;
-    await new TelegramAlerter({ botToken: TOKEN, chatId: '1', fetchImpl: hanging, logger, timeoutMs: 20 }).notify(alert);
+    const hanging = ((_u: string, init: RequestInit) =>
+      new Promise((_r, reject) =>
+        init.signal?.addEventListener('abort', () => reject(new DOMException('timed out', 'TimeoutError'))),
+      )) as unknown as typeof fetch;
+    await new TelegramAlerter({ botToken: TOKEN, chatId: '1', fetchImpl: hanging, logger, timeoutMs: 20 }).notify(
+      alert,
+    );
     expect(lines.length).toBe(3);
     expect(lines.join('')).not.toContain(TOKEN);
     expect(lines.join('')).not.toContain('AAEexample');
@@ -53,8 +72,17 @@ describe('TelegramAlerter', () => {
 
   it('formats a daily summary', () => {
     const text = formatDailySummary({
-      mode: 'paper', date: '2026-11-22', equityLamports: 10_250_000_000n, startOfDayEquityLamports: 10_000_000_000n,
-      netPnlLamports: 250_000_000n, realizedPnlLamports: -50_000_000n, trades: 4, wins: 3, solUsd: 200, engineState: 'running', haltReason: null,
+      mode: 'paper',
+      date: '2026-11-22',
+      equityLamports: 10_250_000_000n,
+      startOfDayEquityLamports: 10_000_000_000n,
+      netPnlLamports: 250_000_000n,
+      realizedPnlLamports: -50_000_000n,
+      trades: 4,
+      wins: 3,
+      solUsd: 200,
+      engineState: 'running',
+      haltReason: null,
     });
     expect(text).toContain('Net P&L: 0.2500 SOL (~$50.00)');
     expect(text).toContain('Realized: -0.0500 SOL');

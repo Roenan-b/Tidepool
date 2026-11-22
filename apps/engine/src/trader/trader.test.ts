@@ -22,28 +22,69 @@ function setup(o: { mode?: 'paper' | 'live'; options?: TraderOptions; gate?: Pro
   let ids = 0;
   const trader = new Trader(
     {
-      risk, broker, candidates: cands, orders, clock,
+      risk,
+      broker,
+      candidates: cands,
+      orders,
+      clock,
       equityLamports: async () => 10_000_000_000n,
       solUsd: () => 150,
       costModelFor: () => COST_MODELS.graduated,
-      alert: (a) => { alerts.push(a); },
-      onStateChange: (s) => { states.push(s); },
+      alert: (a) => {
+        alerts.push(a);
+      },
+      onStateChange: (s) => {
+        states.push(s);
+      },
       sleep: async () => undefined,
       newId: () => `00000000-0000-4000-8000-${(++ids).toString().padStart(12, '0')}`,
     },
     { manualTicks: true, ...o.options },
   );
-  return { trader, risk, broker, cands, orders, alerts, states, advance: (ms: number) => { nowMs += ms; } };
+  return {
+    trader,
+    risk,
+    broker,
+    cands,
+    orders,
+    alerts,
+    states,
+    advance: (ms: number) => {
+      nowMs += ms;
+    },
+  };
 }
 
 function openPosition(risk: FakeRisk, mint = MINT_A, id = 'pos-x') {
-  risk.positions.push({ id, mint, symbol: 'TEST', strategy: 'momentum-v1', status: 'open', entryLamports: 1_000_000_000n, tokenAmount: 1_000_000_000n, entryPriceUsd: 0.15, openedAt: T0, markLamports: null });
+  risk.positions.push({
+    id,
+    mint,
+    symbol: 'TEST',
+    strategy: 'momentum-v1',
+    status: 'open',
+    entryLamports: 1_000_000_000n,
+    tokenAmount: 1_000_000_000n,
+    entryPriceUsd: 0.15,
+    openedAt: T0,
+    markLamports: null,
+  });
 }
 
 describe('Trader entries', () => {
   it('rejects a broker/risk mode mismatch', () => {
     const risk = new FakeRisk('paper');
-    expect(() => new Trader({ risk, broker: new FakeBroker('live'), candidates: new StaticCandidates(), orders: new InMemoryOrderRepository(), equityLamports: async () => 1n, solUsd: () => 1, costModelFor: () => COST_MODELS.graduated })).toThrow(/mode mismatch/);
+    expect(
+      () =>
+        new Trader({
+          risk,
+          broker: new FakeBroker('live'),
+          candidates: new StaticCandidates(),
+          orders: new InMemoryOrderRepository(),
+          equityLamports: async () => 1n,
+          solUsd: () => 1,
+          costModelFor: () => COST_MODELS.graduated,
+        }),
+    ).toThrow(/mode mismatch/);
   });
 
   it('does nothing before start', async () => {
@@ -67,7 +108,13 @@ describe('Trader entries', () => {
     const fill = s.risk.argsOf<{ lamportsSpent: bigint; reservationId: string }>('recordFill')[0]!;
     expect(fill).toMatchObject({ reservationId: 'res-1', lamportsSpent: 500_000_000n });
     const [order] = s.orders.list();
-    expect(order).toMatchObject({ side: 'buy', status: 'landed', reservationId: 'res-1', lamports: 500_000_000n, positionId: 'pos-2' });
+    expect(order).toMatchObject({
+      side: 'buy',
+      status: 'landed',
+      reservationId: 'res-1',
+      lamports: 500_000_000n,
+      positionId: 'pos-2',
+    });
     expect(order!.signalAt?.toISOString()).toBe(T0.toISOString());
     expect(order!.submittedAt).not.toBeNull();
     expect(order!.landedAt).not.toBeNull();
@@ -99,7 +146,9 @@ describe('Trader entries', () => {
     s.broker.buyResult = { ok: false, error: 'blockhash expired', burnedFeeLamports: 505_000n };
     await s.trader.start('balanced');
     await s.trader.runEntryTick();
-    expect(s.risk.argsOf('release')).toEqual([{ reservationId: 'res-1', reason: 'buy failed: blockhash expired', burned: 505_000n }]);
+    expect(s.risk.argsOf('release')).toEqual([
+      { reservationId: 'res-1', reason: 'buy failed: blockhash expired', burned: 505_000n },
+    ]);
     expect(s.risk.count('recordFill')).toBe(0);
     expect(s.orders.list()[0]).toMatchObject({ status: 'failed', feeLamports: 505_000n, error: 'blockhash expired' });
   });
@@ -162,7 +211,11 @@ describe('Trader entries', () => {
     openPosition(s.risk, MINT_A);
     await s.trader.start('balanced');
     const r = await s.trader.runEntryTick();
-    expect(r).toMatchObject({ status: 'ran', entered: 0, outcomes: [{ mint: MINT_A, outcome: 'skip: already held or in flight' }] });
+    expect(r).toMatchObject({
+      status: 'ran',
+      entered: 0,
+      outcomes: [{ mint: MINT_A, outcome: 'skip: already held or in flight' }],
+    });
     expect(s.broker.quotes.filter((q) => q.side === 'buy')).toHaveLength(0);
     expect(s.risk.count('reserve')).toBe(0);
   });
@@ -189,7 +242,9 @@ describe('Trader entries', () => {
 
   it('never overlaps entry ticks', async () => {
     let open!: () => void;
-    const gate = new Promise<void>((r) => { open = r; });
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
     const s = setup({ gate });
     await s.trader.start('balanced');
     const first = s.trader.runEntryTick();
@@ -211,7 +266,11 @@ describe('Trader exits', () => {
     expect(await s.trader.runMonitorTick()).toMatchObject({ status: 'ran', marked: 1, exitsStarted: 1 });
     await s.trader.drain();
     expect(s.risk.count('markPositions')).toBe(1);
-    expect(s.risk.argsOf<ExitReport>('recordExit')[0]).toMatchObject({ positionId: 'pos-x', reason: 'take_profit', lamportsReceived: 1_180_000_000n });
+    expect(s.risk.argsOf<ExitReport>('recordExit')[0]).toMatchObject({
+      positionId: 'pos-x',
+      reason: 'take_profit',
+      lamportsReceived: 1_180_000_000n,
+    });
     const sellOrder = s.orders.list().find((o) => o.side === 'sell');
     expect(sellOrder).toMatchObject({ status: 'landed', positionId: 'pos-x', tokenAmount: 1_000_000_000n });
   });
@@ -235,9 +294,19 @@ describe('Trader exits', () => {
     await s.trader.drain();
     expect(s.broker.sells.map((x) => x.slippageBps)).toEqual([150, 250, 300, 300]);
     expect(s.risk.count('authorizeExit')).toBe(4);
-    expect(s.risk.argsOf<ExitReport>('recordExit')[0]).toMatchObject({ reason: 'stop_loss', lamportsReceived: 480_000_000n });
-    expect(s.risk.argsOf('recordExitFailure')).toEqual([1, 2, 3].map(() => ({ positionId: 'pos-x', burnedFeeLamports: 505_000n, error: 'slippage exceeded' })));
-    expect(s.orders.list().filter((o) => o.side === 'sell').map((o) => o.status)).toEqual(['failed', 'failed', 'failed', 'landed']);
+    expect(s.risk.argsOf<ExitReport>('recordExit')[0]).toMatchObject({
+      reason: 'stop_loss',
+      lamportsReceived: 480_000_000n,
+    });
+    expect(s.risk.argsOf('recordExitFailure')).toEqual(
+      [1, 2, 3].map(() => ({ positionId: 'pos-x', burnedFeeLamports: 505_000n, error: 'slippage exceeded' })),
+    );
+    expect(
+      s.orders
+        .list()
+        .filter((o) => o.side === 'sell')
+        .map((o) => o.status),
+    ).toEqual(['failed', 'failed', 'failed', 'landed']);
   });
 
   it('alerts when a position cannot be exited and backs off until the kill switch', async () => {
@@ -291,7 +360,10 @@ describe('Trader exits', () => {
     const s = setup({ mode: 'live', options: { sell: { maxAttempts: 1 } } });
     openPosition(s.risk);
     s.broker.price.set(MINT_A, 2);
-    s.risk.exitTicket = () => ({ ...makeTicket('sell', MINT_A, 10_000_000n, T0.getTime() + 30_000), ticket: { ...makeTicket('sell', MINT_A, 10_000_000n, T0.getTime() + 30_000).ticket, maxTipLamports: '1' } });
+    s.risk.exitTicket = () => ({
+      ...makeTicket('sell', MINT_A, 10_000_000n, T0.getTime() + 30_000),
+      ticket: { ...makeTicket('sell', MINT_A, 10_000_000n, T0.getTime() + 30_000).ticket, maxTipLamports: '1' },
+    });
     await s.trader.start('balanced');
     await s.trader.runMonitorTick();
     await s.trader.drain();
@@ -374,19 +446,33 @@ describe('Trader review regressions', () => {
 
   it('a kill switch that lands while the reservation is being approved stops the buy', async () => {
     const s = setup();
-    s.risk.onReserve = async () => { s.risk.onReserve = null; await s.trader.killSwitch(); };
+    s.risk.onReserve = async () => {
+      s.risk.onReserve = null;
+      await s.trader.killSwitch();
+    };
     await s.trader.start('balanced');
     const r = await s.trader.runEntryTick();
-    expect(r).toMatchObject({ status: 'ran', entered: 0, outcomes: [{ mint: MINT_A, outcome: 'released: entries disabled before submit' }] });
+    expect(r).toMatchObject({
+      status: 'ran',
+      entered: 0,
+      outcomes: [{ mint: MINT_A, outcome: 'released: entries disabled before submit' }],
+    });
     expect(s.broker.buys).toHaveLength(0);
-    expect(s.risk.argsOf<{ reason: string }>('release')).toEqual([{ reservationId: 'res-1', reason: 'entries disabled before submit', burned: 0n }]);
+    expect(s.risk.argsOf<{ reason: string }>('release')).toEqual([
+      { reservationId: 'res-1', reason: 'entries disabled before submit', burned: 0n },
+    ]);
   });
 
   it('subtracts the broker-reported extra buy overhead so the spend stays inside the reservation', async () => {
     const s = setup();
     const extra = 2_110_000n;
     Object.assign(s.broker, { extraBuyOverheadLamports: () => extra });
-    s.broker.buyResult = (a) => ({ ok: true, lamportsSpent: a.lamportsIn + a.tipLamports + 5_000n + extra, tokenAmount: 1_000n, signature: null });
+    s.broker.buyResult = (a) => ({
+      ok: true,
+      lamportsSpent: a.lamportsIn + a.tipLamports + 5_000n + extra,
+      tokenAmount: 1_000n,
+      signature: null,
+    });
     await s.trader.start('balanced');
     await s.trader.runEntryTick();
     const req = s.risk.argsOf<ReservationRequest>('reserve')[0]!;
@@ -397,7 +483,12 @@ describe('Trader review regressions', () => {
 
   it('alerts when a buy spent more than was reserved (e.g. token account rent not budgeted)', async () => {
     const s = setup();
-    s.broker.buyResult = (a) => ({ ok: true, lamportsSpent: a.lamportsIn + a.tipLamports + 5_000n + 2_039_280n, tokenAmount: 1_000n, signature: null });
+    s.broker.buyResult = (a) => ({
+      ok: true,
+      lamportsSpent: a.lamportsIn + a.tipLamports + 5_000n + 2_039_280n,
+      tokenAmount: 1_000n,
+      signature: null,
+    });
     await s.trader.start('balanced');
     await s.trader.runEntryTick();
     expect(s.alerts.map((a) => a.code)).toContain('spend_above_reservation');
@@ -411,7 +502,9 @@ describe('Trader review regressions', () => {
     const r = await s.trader.runEntryTick();
     expect(r).toMatchObject({ outcomes: [{ outcome: 'released: buy landed without tokens' }] });
     expect(s.risk.count('recordFill')).toBe(0);
-    expect(s.risk.argsOf('release')).toEqual([{ reservationId: 'res-1', reason: 'buy landed without tokens', burned: 500_000_000n }]);
+    expect(s.risk.argsOf('release')).toEqual([
+      { reservationId: 'res-1', reason: 'buy landed without tokens', burned: 500_000_000n },
+    ]);
     expect(s.alerts.map((a) => a.code)).toContain('buy_no_tokens');
   });
 
@@ -419,11 +512,16 @@ describe('Trader review regressions', () => {
     const s = setup();
     s.risk.failRecordFill = 1;
     await s.trader.start('balanced');
-    expect(await s.trader.runEntryTick()).toMatchObject({ outcomes: [{ outcome: 'entered: recordFill failed; will retry' }] });
+    expect(await s.trader.runEntryTick()).toMatchObject({
+      outcomes: [{ outcome: 'entered: recordFill failed; will retry' }],
+    });
     s.cands.list = [makeCandidate({ observedAt: new Date(T0.getTime() + 1_000).toISOString() }, T0)];
     expect(await s.trader.runEntryTick()).toMatchObject({ outcomes: [{ outcome: 'skip: already held or in flight' }] });
     await s.trader.runMonitorTick();
-    expect(s.risk.argsOf<{ reservationId: string }>('recordFill').map((f) => f.reservationId)).toEqual(['res-1', 'res-1']);
+    expect(s.risk.argsOf<{ reservationId: string }>('recordFill').map((f) => f.reservationId)).toEqual([
+      'res-1',
+      'res-1',
+    ]);
     expect(s.risk.positions).toHaveLength(1);
     expect(s.orders.list()[0]!.positionId).toBe(s.risk.positions[0]!.id);
     expect(s.broker.buys).toHaveLength(1);
@@ -475,7 +573,9 @@ describe('Trader review regressions', () => {
     await s.trader.start('balanced');
     await s.trader.runMonitorTick();
     await s.trader.drain();
-    expect(s.risk.argsOf('recordExitFailure')).toEqual([{ positionId: 'pos-x', burnedFeeLamports: 3_000n, error: 'sell proceeds below transaction fees' }]);
+    expect(s.risk.argsOf('recordExitFailure')).toEqual([
+      { positionId: 'pos-x', burnedFeeLamports: 3_000n, error: 'sell proceeds below transaction fees' },
+    ]);
     expect(s.risk.argsOf<ExitReport>('recordExit')[0]).toMatchObject({ lamportsReceived: 0n, reason: 'stop_loss' });
   });
 

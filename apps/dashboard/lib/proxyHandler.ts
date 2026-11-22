@@ -21,7 +21,10 @@ function demoResponse(key: ProxyRouteKey, query: URLSearchParams): unknown {
     case 'candidates':
       return demoCandidates();
     case 'events':
-      return demoEvents(Date.now(), { limit, beforeSeq: query.get('beforeSeq') ? Number(query.get('beforeSeq')) : undefined });
+      return demoEvents(Date.now(), {
+        limit,
+        beforeSeq: query.get('beforeSeq') ? Number(query.get('beforeSeq')) : undefined,
+      });
     case 'metrics':
       return demoMetrics();
     case 'signals':
@@ -72,6 +75,10 @@ export async function handleProxy(req: NextRequest, key: ProxyRouteKey): Promise
       return errorJson(503, 'config_error', 'The dashboard is misconfigured. Check the server logs.');
     }
     console.error('[dashboard] proxy failure:', err instanceof Error ? err.message : 'unknown error');
-    return errorJson(500, 'internal_error', 'Something went wrong in the dashboard. Check the operations view before retrying.');
+    return errorJson(
+      500,
+      'internal_error',
+      'Something went wrong in the dashboard. Check the operations view before retrying.',
+    );
   }
 }

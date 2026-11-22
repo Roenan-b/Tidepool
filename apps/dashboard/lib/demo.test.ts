@@ -5,7 +5,11 @@ import { DEMO_DEPOSIT_ADDRESS, demoEvents, demoPositions, demoStatus } from './d
 describe('demo fixtures', () => {
   it('produce a consistent status with integer lamport strings', () => {
     const s = demoStatus(1_700_000_000_000);
-    const sum = BigInt(s.pool.cashLamports) + BigInt(s.pool.reservedLamports) + BigInt(s.pool.inPositionsLamports) + BigInt(s.pool.feeReserveLamports);
+    const sum =
+      BigInt(s.pool.cashLamports) +
+      BigInt(s.pool.reservedLamports) +
+      BigInt(s.pool.inPositionsLamports) +
+      BigInt(s.pool.feeReserveLamports);
     expect(BigInt(s.pool.equityLamports)).toBe(sum);
     expect(s.mode).toBe('paper');
     expect(s.liveTradingAllowed).toBe(false);

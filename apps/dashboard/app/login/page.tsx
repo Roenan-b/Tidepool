@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { LoginForm } from '../../components/LoginForm.js';
 import { MenuBar } from '../../components/MenuBar.js';
@@ -22,13 +23,23 @@ export default async function LoginPage() {
           {demo ? (
             <div className="stack">
               <div className="banner banner-warn" role="status">
-                <span className="banner-icon" aria-hidden="true">!</span>
+                <span className="banner-icon" aria-hidden="true">
+                  !
+                </span>
                 <div>
                   <h2>Demo mode</h2>
                   <p>Sign-in is bypassed and every action is disabled. The data shown is sample data.</p>
                 </div>
               </div>
-              {viewer ? <a className="btn btn-primary btn-block" href="/">Open the demo</a> : <p className="error-text">Demo mode only answers requests sent to this machine (127.0.0.1 or localhost).</p>}
+              {viewer ? (
+                <Link className="btn btn-primary btn-block" href="/">
+                  Open the demo
+                </Link>
+              ) : (
+                <p className="error-text">
+                  Demo mode only answers requests sent to this machine (127.0.0.1 or localhost).
+                </p>
+              )}
             </div>
           ) : (
             <LoginForm />

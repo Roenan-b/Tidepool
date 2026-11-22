@@ -10,7 +10,10 @@ import { solToLamports } from '@tidepool/core';
 const PLACEHOLDER = /^replace-with/i;
 
 /** Treats empty strings (common in .env files) as unset. */
-const optionalString = z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().optional());
+const optionalString = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().optional(),
+);
 
 const optionalUrl = z.preprocess(
   (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
@@ -34,7 +37,10 @@ function numberWithDefault(def: number, min: number, max: number) {
 function lamportsWithDefault(def: bigint) {
   return z.preprocess(
     (v) => (v === undefined || (typeof v === 'string' && v.trim() === '') ? def.toString() : v),
-    z.string().regex(/^\d+$/, 'must be a non-negative integer (lamports)').transform((s) => BigInt(s)),
+    z
+      .string()
+      .regex(/^\d+$/, 'must be a non-negative integer (lamports)')
+      .transform((s) => BigInt(s)),
   );
 }
 
@@ -56,7 +62,9 @@ const EnvSchema = z.object({
     z.enum(LOOPBACK_HOSTS, { errorMap: () => ({ message: 'ENGINE_API_HOST must be a loopback address' }) }),
   ),
   ENGINE_API_PORT: intWithDefault(7070, 1, 65535),
-  ENGINE_API_TOKEN: secret('ENGINE_API_TOKEN', 32).refine((v) => v !== undefined, { message: 'ENGINE_API_TOKEN is required' }),
+  ENGINE_API_TOKEN: secret('ENGINE_API_TOKEN', 32).refine((v) => v !== undefined, {
+    message: 'ENGINE_API_TOKEN is required',
+  }),
 
   RESERVATION_TICKET_SECRET: secret('RESERVATION_TICKET_SECRET', 32),
   SIGNER_URL: optionalUrl,
@@ -64,10 +72,16 @@ const EnvSchema = z.object({
   SIGNER_MAX_TIP_LAMPORTS: lamportsWithDefault(2_000_000n),
   SIGNER_MAX_PER_TX_LAMPORTS: lamportsWithDefault(500_000_000n),
 
-  SOLANA_RPC_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.mainnet-beta.solana.com' : v), z.string().url()),
+  SOLANA_RPC_URL: z.preprocess(
+    (v) => (v === undefined || v === '' ? 'https://api.mainnet-beta.solana.com' : v),
+    z.string().url(),
+  ),
   HELIUS_API_KEY: optionalString,
   HELIUS_WS_URL: optionalUrl,
-  DEXSCREENER_BASE_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.dexscreener.com' : v), z.string().url()),
+  DEXSCREENER_BASE_URL: z.preprocess(
+    (v) => (v === undefined || v === '' ? 'https://api.dexscreener.com' : v),
+    z.string().url(),
+  ),
   JUPITER_BASE_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.jup.ag' : v), z.string().url()),
   JUPITER_API_KEY: optionalString,
   LANDING_METHOD: z.preprocess((v) => (v === undefined || v === '' ? 'rpc' : v), z.enum(['rpc', 'sender', 'jito'])),
@@ -173,8 +187,10 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     issues.push('SIGNER_URL must use https, or http to a loopback address');
   }
   if (e.LIVE_TRADING_ENABLED) {
-    if (!e.RESERVATION_TICKET_SECRET) issues.push('RESERVATION_TICKET_SECRET (>= 32 chars) is required when LIVE_TRADING_ENABLED=true');
-    if (!signerUrl || !signerToken) issues.push('SIGNER_URL and SIGNER_API_TOKEN are required when LIVE_TRADING_ENABLED=true');
+    if (!e.RESERVATION_TICKET_SECRET)
+      issues.push('RESERVATION_TICKET_SECRET (>= 32 chars) is required when LIVE_TRADING_ENABLED=true');
+    if (!signerUrl || !signerToken)
+      issues.push('SIGNER_URL and SIGNER_API_TOKEN are required when LIVE_TRADING_ENABLED=true');
   }
   if ((e.TELEGRAM_BOT_TOKEN === undefined) !== (e.TELEGRAM_CHAT_ID === undefined)) {
     issues.push('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set together');
@@ -186,8 +202,16 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     liveTradingEnabled: e.LIVE_TRADING_ENABLED,
     stretchTargetUsd: e.STRETCH_TARGET_USD,
     paperStartingLamports: solToLamports(e.PAPER_STARTING_SOL),
-    api: { host: e.ENGINE_API_HOST, port: e.ENGINE_API_PORT, token: e.ENGINE_API_TOKEN as string },
-    signer: signerUrl && signerToken ? { url: signerUrl, apiToken: signerToken, maxTipLamports: e.SIGNER_MAX_TIP_LAMPORTS, maxPerTxLamports: e.SIGNER_MAX_PER_TX_LAMPORTS } : null,
+    api: { host: e.ENGINE_API_HOST, port: e.ENGINE_API_PORT, token: e.ENGINE_API_TOKEN },
+    signer:
+      signerUrl && signerToken
+        ? {
+            url: signerUrl,
+            apiToken: signerToken,
+            maxTipLamports: e.SIGNER_MAX_TIP_LAMPORTS,
+            maxPerTxLamports: e.SIGNER_MAX_PER_TX_LAMPORTS,
+          }
+        : null,
     ticketSecret: e.RESERVATION_TICKET_SECRET ?? null,
     solana: {
       rpcUrl: e.SOLANA_RPC_URL,
@@ -214,7 +238,10 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
       model: e.NARRATIVE_MODEL ?? null,
       maxCallsPerHour: e.NARRATIVE_MAX_CALLS_PER_HOUR,
     },
-    telegram: e.TELEGRAM_BOT_TOKEN && e.TELEGRAM_CHAT_ID ? { botToken: e.TELEGRAM_BOT_TOKEN, chatId: e.TELEGRAM_CHAT_ID } : null,
+    telegram:
+      e.TELEGRAM_BOT_TOKEN && e.TELEGRAM_CHAT_ID
+        ? { botToken: e.TELEGRAM_BOT_TOKEN, chatId: e.TELEGRAM_CHAT_ID }
+        : null,
     risk: {
       reservationTtlSeconds: e.RESERVATION_TTL_SECONDS,
       reconcileIntervalSeconds: e.RECONCILE_INTERVAL_SECONDS,

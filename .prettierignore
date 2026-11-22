@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+coverage/
+package-lock.json
+CHANGELOG.md
+.release-please-manifest.json
+data/
+db/**/*.sql

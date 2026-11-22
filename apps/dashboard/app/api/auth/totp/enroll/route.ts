@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
   try {
     const r = await getAuthService().startEnrollment(viewer);
     if (r.kind === 'already_enabled') {
-      return errorJson(409, 'already_enabled', 'Two-factor sign-in is already on. An operator can reset it with the create-user script.');
+      return errorJson(
+        409,
+        'already_enabled',
+        'Two-factor sign-in is already on. An operator can reset it with the create-user script.',
+      );
     }
     const qrDataUrl = await QRCode.toDataURL(r.uri, { errorCorrectionLevel: 'M', margin: 2, width: 240 });
     return json({ qrDataUrl, secret: r.secretBase32, otpauthUri: r.uri });

@@ -1,7 +1,10 @@
 /** Input record shapes for the replay harness (validated with zod at the file boundary). */
 import { z } from 'zod';
 
-const IsoTime = z.string().max(40).refine((s) => Number.isFinite(Date.parse(s)), 'invalid ISO time');
+const IsoTime = z
+  .string()
+  .max(40)
+  .refine((s) => Number.isFinite(Date.parse(s)), 'invalid ISO time');
 const Mint = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
 
 /** Same shape as the signals table (camelCase): one normalized collector event. */

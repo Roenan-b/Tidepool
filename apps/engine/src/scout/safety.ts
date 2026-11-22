@@ -38,7 +38,10 @@ export interface SellQuoter {
    * value implied by the current price for that size; `quotedLamports` is what a sell route returns.
    * Returns null when no route exists.
    */
-  quoteSell(args: { mint: string; sizeLamports: bigint }): Promise<{ expectedLamports: bigint; quotedLamports: bigint } | null>;
+  quoteSell(args: {
+    mint: string;
+    sizeLamports: bigint;
+  }): Promise<{ expectedLamports: bigint; quotedLamports: bigint } | null>;
 }
 
 export interface MarketInfo {
@@ -72,7 +75,8 @@ export class CreatorBlocklist {
   static async fromFile(path: string): Promise<CreatorBlocklist> {
     const raw = JSON.parse(await readFile(path, 'utf8')) as unknown;
     const parsed = blocklistSchema.safeParse(raw);
-    if (!parsed.success) throw new Error(`creator blocklist at ${path} is invalid: expected a JSON array of base58 addresses`);
+    if (!parsed.success)
+      throw new Error(`creator blocklist at ${path} is invalid: expected a JSON array of base58 addresses`);
     return new CreatorBlocklist(parsed.data);
   }
   has(address: string): boolean {
@@ -136,7 +140,10 @@ const METADATA_V1_KEY = 4;
 const DEFAULT_PUBKEY = '11111111111111111111111111111111';
 
 export function pumpBondingCurveAddress(mint: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'), mint.toBuffer()], new PublicKey(PUMP_FUN_PROGRAM_ID))[0];
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('bonding-curve'), mint.toBuffer()],
+    new PublicKey(PUMP_FUN_PROGRAM_ID),
+  )[0];
 }
 
 export function metadataAddress(mint: PublicKey): PublicKey {
@@ -208,7 +215,11 @@ export class OnChainSafetyChecker implements SafetyChecker {
 
   private async simulateSell(mint: string, sizeLamports: bigint): Promise<number | null> {
     try {
-      const q = await withTimeout(this.opts.sellQuoter!.quoteSell({ mint, sizeLamports }), this.timeoutMs, 'sell quote');
+      const q = await withTimeout(
+        this.opts.sellQuoter!.quoteSell({ mint, sizeLamports }),
+        this.timeoutMs,
+        'sell quote',
+      );
       if (!q || q.expectedLamports <= 0n || q.quotedLamports < 0n) return null;
       return ratio(q.quotedLamports, q.expectedLamports);
     } catch {
@@ -248,11 +259,16 @@ export class OnChainSafetyChecker implements SafetyChecker {
     const mintKey = new PublicKey(mint);
     const curve = pumpBondingCurveAddress(mintKey);
     const meta = metadataAddress(mintKey);
-    const accounts = await withTimeout(this.opts.rpc.getMultipleParsedAccounts([mintKey, meta, curve]), this.timeoutMs, 'mint lookup');
+    const accounts = await withTimeout(
+      this.opts.rpc.getMultipleParsedAccounts([mintKey, meta, curve]),
+      this.timeoutMs,
+      'mint lookup',
+    );
     const [mintAcc, metaAcc, curveAcc] = accounts.value;
     if (!mintAcc) throw new SafetyCheckError('mint account not found');
     const programId = mintAcc.owner.toBase58();
-    if (programId !== TOKEN_PROGRAM_ID && programId !== TOKEN_2022_PROGRAM_ID) throw new SafetyCheckError('mint is not owned by a token program');
+    if (programId !== TOKEN_PROGRAM_ID && programId !== TOKEN_2022_PROGRAM_ID)
+      throw new SafetyCheckError('mint is not owned by a token program');
     if (!isParsed(mintAcc.data)) throw new SafetyCheckError('mint account could not be parsed');
     const parsed = parsedMintSchema.safeParse(mintAcc.data);
     if (!parsed.success) throw new SafetyCheckError('mint account has unexpected shape');
@@ -260,7 +276,8 @@ export class OnChainSafetyChecker implements SafetyChecker {
     if (info.isInitialized === false) throw new SafetyCheckError('mint is not initialized');
     const supply = BigInt(info.supply);
     if (supply <= 0n) throw new SafetyCheckError('mint supply is zero');
-    const token2022Extensions = programId === TOKEN_2022_PROGRAM_ID ? [...new Set((info.extensions ?? []).map((e) => e.extension))].sort() : [];
+    const token2022Extensions =
+      programId === TOKEN_2022_PROGRAM_ID ? [...new Set((info.extensions ?? []).map((e) => e.extension))].sort() : [];
 
     const creators = new Set<string>(this.opts.creatorHints?.creators(mint) ?? []);
     const ua = readMetadataUpdateAuthority(metaAcc);
@@ -285,7 +302,11 @@ export class OnChainSafetyChecker implements SafetyChecker {
   }
 
   private async top10Share(mintKey: PublicKey, supply: bigint, bondingCurve: string): Promise<number> {
-    const largest = await withTimeout(this.opts.rpc.getTokenLargestAccounts(mintKey), this.timeoutMs, 'largest accounts');
+    const largest = await withTimeout(
+      this.opts.rpc.getTokenLargestAccounts(mintKey),
+      this.timeoutMs,
+      'largest accounts',
+    );
     const holders = largest.value.map((h) => ({ address: h.address.toBase58(), amount: BigInt(h.amount) }));
     if (holders.length === 0) return 1;
     const market = this.opts.market.market(mintKey.toBase58());
@@ -332,7 +353,8 @@ function readMetadataUpdateAuthority(acc: AccountInfo<Buffer | ParsedAccountData
 function readBondingCurveCreator(acc: AccountInfo<Buffer | ParsedAccountData> | null | undefined): string | null {
   if (!acc || acc.owner.toBase58() !== PUMP_FUN_PROGRAM_ID || !Buffer.isBuffer(acc.data)) return null;
   const d = acc.data;
-  if (d.length < BONDING_CURVE_CREATOR_OFFSET + 32 || !d.subarray(0, 8).equals(BONDING_CURVE_DISCRIMINATOR)) return null;
+  if (d.length < BONDING_CURVE_CREATOR_OFFSET + 32 || !d.subarray(0, 8).equals(BONDING_CURVE_DISCRIMINATOR))
+    return null;
   const c = new PublicKey(d.subarray(BONDING_CURVE_CREATOR_OFFSET, BONDING_CURVE_CREATOR_OFFSET + 32)).toBase58();
   return c === DEFAULT_PUBKEY ? null : c;
 }

@@ -11,12 +11,19 @@ const MIGRATION_FILE = /^(\d+)_[A-Za-z0-9_-]+\.sql$/;
 /** Arbitrary constant used to serialize concurrent migration runners against the same schema. */
 const MIGRATION_LOCK_KEY = 7_420_001;
 
-export interface MigrationResult { applied: string[]; skipped: string[] }
+export interface MigrationResult {
+  applied: string[];
+  skipped: string[];
+}
 
-export async function listMigrations(dir: string): Promise<Array<{ version: string; file: string }>> {
+export async function listMigrations(dir: string): Promise<{ version: string; file: string }[]> {
   const files = (await readdir(dir)).filter((f) => MIGRATION_FILE.test(f));
   return files
-    .map((file) => ({ version: file.replace(/\.sql$/, ''), file: join(dir, file), order: Number(MIGRATION_FILE.exec(file)![1]) }))
+    .map((file) => ({
+      version: file.replace(/\.sql$/, ''),
+      file: join(dir, file),
+      order: Number(MIGRATION_FILE.exec(file)![1]),
+    }))
     .sort((a, b) => a.order - b.order || a.version.localeCompare(b.version))
     .map(({ version, file }) => ({ version, file }));
 }
@@ -34,8 +41,12 @@ export async function runMigrations(pool: pg.Pool, dir: string = DEFAULT_MIGRATI
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock($1, hashtext(current_schema()))', [MIGRATION_LOCK_KEY]);
-    await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-    const done = new Set((await client.query<{ version: string }>('SELECT version FROM schema_migrations')).rows.map((r) => r.version));
+    await client.query(
+      'CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())',
+    );
+    const done = new Set(
+      (await client.query<{ version: string }>('SELECT version FROM schema_migrations')).rows.map((r) => r.version),
+    );
     for (const m of migrations) {
       if (done.has(m.version)) {
         skipped.push(m.version);
@@ -43,7 +54,9 @@ export async function runMigrations(pool: pg.Pool, dir: string = DEFAULT_MIGRATI
       }
       const sql = await readFile(m.file, 'utf8');
       await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING', [m.version]);
+      await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING', [
+        m.version,
+      ]);
       applied.push(m.version);
     }
     await client.query('COMMIT');
@@ -66,7 +79,9 @@ async function main(): Promise<void> {
   const pool = createPool(url, { max: 1, statementTimeoutMs: 120_000, applicationName: 'tidepool-migrate' });
   try {
     const res = await runMigrations(pool, dir);
-    process.stdout.write(`migrations applied: ${res.applied.length ? res.applied.join(', ') : 'none'}; already applied: ${res.skipped.length}\n`);
+    process.stdout.write(
+      `migrations applied: ${res.applied.length ? res.applied.join(', ') : 'none'}; already applied: ${res.skipped.length}\n`,
+    );
   } finally {
     await pool.end();
   }

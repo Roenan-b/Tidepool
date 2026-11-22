@@ -42,7 +42,11 @@ export function createPool(url: string, opts: CreatePoolOptions = {}): pg.Pool {
 const RETRYABLE = new Set(['40001', '40P01']); // serialization_failure, deadlock_detected
 
 /** Runs `fn` inside BEGIN/COMMIT on a dedicated client, retrying on serialization failures and deadlocks. */
-export async function withTransaction<T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promise<T>, attempts = 3): Promise<T> {
+export async function withTransaction<T>(
+  pool: pg.Pool,
+  fn: (client: pg.PoolClient) => Promise<T>,
+  attempts = 3,
+): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const client = await pool.connect();
     try {
@@ -70,6 +74,7 @@ export function toBig(v: unknown): bigint {
     return BigInt(v);
   }
   if (typeof v === 'string' && /^-?\d+$/.test(v)) return BigInt(v);
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- error text for an unexpected value
   throw new TypeError(`cannot convert value to bigint: ${String(v)}`);
 }
 

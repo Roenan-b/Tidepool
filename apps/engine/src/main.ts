@@ -18,8 +18,15 @@ import { buildControlApi, listenControlApi, PgQueries } from './api/index.js';
 import { createAlerter } from './alerts/index.js';
 import { createScout, scoutConfigFromEnv } from './scout/index.js';
 import {
-  Trader, PaperBroker, LiveBroker, JupiterClient, JupiterQuoteSource, JupiterSellQuoter,
-  HttpSignerClient, PgOrderRepository, type TraderAlert,
+  Trader,
+  PaperBroker,
+  LiveBroker,
+  JupiterClient,
+  JupiterQuoteSource,
+  JupiterSellQuoter,
+  HttpSignerClient,
+  PgOrderRepository,
+  type TraderAlert,
 } from './trader/index.js';
 import type { EngineControl, RiskOfficer } from './contracts.js';
 import { withFreshSafety } from './wiring/safetyGate.js';
@@ -33,9 +40,14 @@ async function readActiveMode(pool: pg.Pool, cfg: EngineConfig): Promise<Trading
   return m === 'live' && cfg.liveTradingEnabled ? 'live' : 'paper';
 }
 
-async function readPoolState(pool: pg.Pool, mode: TradingMode): Promise<{ state: string; preset: PresetName; cash: bigint }> {
+async function readPoolState(
+  pool: pg.Pool,
+  mode: TradingMode,
+): Promise<{ state: string; preset: PresetName; cash: bigint }> {
   const r = await pool.query<{ engine_state: string; preset: PresetName; cash_lamports: string }>(
-    'SELECT engine_state, preset, cash_lamports::text FROM pool_state WHERE mode = $1', [mode]);
+    'SELECT engine_state, preset, cash_lamports::text FROM pool_state WHERE mode = $1',
+    [mode],
+  );
   const row = r.rows[0];
   if (!row) throw new Error(`pool_state row missing for ${mode}`);
   return { state: row.engine_state, preset: row.preset, cash: BigInt(row.cash_lamports) };
@@ -68,8 +80,13 @@ async function main(): Promise<void> {
   const alerter = createAlerter(cfg, log);
   const connection = new Connection(cfg.solana.rpcUrl, 'confirmed');
   const rpcHealth = new RpcHealthTracker();
-  const jupiter = new JupiterClient({ baseUrl: cfg.jupiter.baseUrl, ...(cfg.jupiter.apiKey ? { apiKey: cfg.jupiter.apiKey } : {}) });
-  const solPrice = new SolPriceFeed(jupiter, { onError: (e) => log.warn({ err: String(e) }, 'SOL price refresh failed') });
+  const jupiter = new JupiterClient({
+    baseUrl: cfg.jupiter.baseUrl,
+    ...(cfg.jupiter.apiKey ? { apiKey: cfg.jupiter.apiKey } : {}),
+  });
+  const solPrice = new SolPriceFeed(jupiter, {
+    onError: (e) => log.warn({ err: String(e) }, 'SOL price refresh failed'),
+  });
   solPrice.start();
   const solUsd = () => solPrice.get();
 
@@ -80,7 +97,16 @@ async function main(): Promise<void> {
   let walletPublicKey: string | null = null;
   if (cfg.liveTradingEnabled) {
     if (!cfg.signer || !cfg.ticketSecret) throw new Error('live trading enabled without signer configuration');
-    officers.live = new PgRiskOfficer({ pool, audit, mode: 'live', solUsd, ticketSecret: cfg.ticketSecret, config: riskSettings, alerter, logger: log });
+    officers.live = new PgRiskOfficer({
+      pool,
+      audit,
+      mode: 'live',
+      solUsd,
+      ticketSecret: cfg.ticketSecret,
+      config: riskSettings,
+      alerter,
+      logger: log,
+    });
     walletPublicKey = await fetchSignerWallet(cfg.signer.url);
     await officers.live.setDepositAddress(walletPublicKey);
     log.info({ wallet: walletPublicKey }, 'live trading is permitted by config; signer reachable');
@@ -117,47 +143,67 @@ async function main(): Promise<void> {
 
   const traderAlert = (a: TraderAlert) => {
     log[a.level === 'critical' ? 'error' : 'warn']({ code: a.code }, a.message);
-    void alerter.notify({ kind: 'accounting_warning', severity: a.level, mode: activeMode, title: `Trader: ${a.code}`, body: a.message });
+    void alerter.notify({
+      kind: 'accounting_warning',
+      severity: a.level,
+      mode: activeMode,
+      title: `Trader: ${a.code}`,
+      body: a.message,
+    });
   };
 
   function buildTrader(mode: TradingMode): Trader {
     const officer: RiskOfficer = withFreshSafety(officerFor(mode), scoutBundle.safetyChecker, (mint, err) =>
-      log.warn({ mint, err: String(err) }, 'fresh safety check failed; reservation vetoed'));
+      log.warn({ mint, err: String(err) }, 'fresh safety check failed; reservation vetoed'),
+    );
     let broker;
     if (mode === 'paper') {
       broker = new PaperBroker({ quotes: new JupiterQuoteSource(jupiter) });
     } else {
-      if (!cfg.liveTradingEnabled || !cfg.signer || !walletPublicKey) throw new Error('live broker requested while live trading is disabled');
-      const tipAccount = (process.env.SIGNER_TIP_ACCOUNTS ?? '').split(',').map((s) => s.trim()).filter(Boolean)[0];
+      if (!cfg.liveTradingEnabled || !cfg.signer || !walletPublicKey)
+        throw new Error('live broker requested while live trading is disabled');
+      const tipAccount = (process.env.SIGNER_TIP_ACCOUNTS ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .find(Boolean);
       const method = cfg.solana.landingMethod;
-      const landingUrl = method === 'sender' ? cfg.solana.senderUrl : method === 'jito' ? cfg.solana.jitoBlockEngineUrl : null;
-      if (method !== 'rpc' && (!landingUrl || !tipAccount)) throw new Error(`LANDING_METHOD=${method} needs its URL and SIGNER_TIP_ACCOUNTS`);
+      const landingUrl =
+        method === 'sender' ? cfg.solana.senderUrl : method === 'jito' ? cfg.solana.jitoBlockEngineUrl : null;
+      if (method !== 'rpc' && (!landingUrl || !tipAccount))
+        throw new Error(`LANDING_METHOD=${method} needs its URL and SIGNER_TIP_ACCOUNTS`);
       broker = new LiveBroker({
         liveTradingEnabled: true,
         connection,
         jupiter,
         signer: new HttpSignerClient({ url: cfg.signer.url, token: cfg.signer.apiToken }),
         walletPublicKey,
-        landing: method === 'rpc' ? { method: 'rpc' } : { method, url: landingUrl as string, tipAccount: tipAccount as string },
+        landing: method === 'rpc' ? { method: 'rpc' } : { method, url: landingUrl!, tipAccount: tipAccount! },
       });
     }
-    return new Trader({
-      risk: officer,
-      broker,
-      candidates: scoutBundle.candidateSource,
-      orders,
-      equityLamports: () => equityOf(mode),
-      solUsd,
-      costModelFor: (mint) => costReference.costModelFor(mint),
-      audit,
-      logger: log,
-      alert: traderAlert,
-      onStateChange: (state, info) => log.info({ mode, state, preset: info.preset, reason: info.reason }, 'trader state'),
-    }, {
-      // The signer refuses a buy whose SOL outflow exceeds its per-transaction cap, so live sizing
-      // stays under that cap with room for the tip, priority fee and token account rent.
-      paramOverrides: mode === 'live' && cfg.signer ? { maxPositionLamports: liveSizeCap(cfg.signer.maxPerTxLamports, cfg.signer.maxTipLamports) } : {},
-    });
+    return new Trader(
+      {
+        risk: officer,
+        broker,
+        candidates: scoutBundle.candidateSource,
+        orders,
+        equityLamports: () => equityOf(mode),
+        solUsd,
+        costModelFor: (mint) => costReference.costModelFor(mint),
+        audit,
+        logger: log,
+        alert: traderAlert,
+        onStateChange: (state, info) =>
+          log.info({ mode, state, preset: info.preset, reason: info.reason }, 'trader state'),
+      },
+      {
+        // The signer refuses a buy whose SOL outflow exceeds its per-transaction cap, so live sizing
+        // stays under that cap with room for the tip, priority fee and token account rent.
+        paramOverrides:
+          mode === 'live' && cfg.signer
+            ? { maxPositionLamports: liveSizeCap(cfg.signer.maxPerTxLamports, cfg.signer.maxTipLamports) }
+            : {},
+      },
+    );
   }
 
   let trader = buildTrader(activeMode);
@@ -194,7 +240,9 @@ async function main(): Promise<void> {
 
   // ---------- Control API ----------
   const queries = new PgQueries({
-    pool, audit, solUsd,
+    pool,
+    audit,
+    solUsd,
     liveTradingAllowed: cfg.liveTradingEnabled,
     stretchTargetUsd: cfg.stretchTargetUsd,
     rpcHealth: () => rpcHealth.snapshot(),
@@ -213,7 +261,10 @@ async function main(): Promise<void> {
         return true;
       },
       feeLamports: async (signature) => {
-        const tx = await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+        const tx = await connection.getTransaction(signature, {
+          commitment: 'confirmed',
+          maxSupportedTransactionVersion: 0,
+        });
         return tx?.meta ? BigInt(tx.meta.fee) : null;
       },
     };
@@ -225,12 +276,26 @@ async function main(): Promise<void> {
       onOutcome: (job, outcome) => {
         const ok = outcome.status === 'booked';
         void audit
-          .append({ actor: 'system', type: ok ? 'withdrawal_sent' : 'withdrawal_not_completed', ref: job.withdrawalId, payload: { ...outcome, feeLamports: 'feeLamports' in outcome ? outcome.feeLamports.toString() : undefined, lamports: job.lamports.toString(), destination: job.destination } })
-          .catch((err) => log.error({ err: String(err) }, 'failed to audit withdrawal outcome'));
+          .append({
+            actor: 'system',
+            type: ok ? 'withdrawal_sent' : 'withdrawal_not_completed',
+            ref: job.withdrawalId,
+            payload: {
+              ...outcome,
+              feeLamports: 'feeLamports' in outcome ? outcome.feeLamports.toString() : undefined,
+              lamports: job.lamports.toString(),
+              destination: job.destination,
+            },
+          })
+          .catch((err: unknown) => log.error({ err: String(err) }, 'failed to audit withdrawal outcome'));
         void alerter.notify({
-          kind: 'withdrawal', severity: ok ? 'info' : 'warning', mode: 'live',
+          kind: 'withdrawal',
+          severity: ok ? 'info' : 'warning',
+          mode: 'live',
           title: ok ? 'Withdrawal sent' : `Withdrawal ${outcome.status.replace('_', ' ')}`,
-          body: ok ? `${job.lamports} lamports to ${job.destination}.` : `${job.lamports} lamports to ${job.destination} was not booked. The hold expires on its own; reconciliation will flag a transfer that landed late.`,
+          body: ok
+            ? `${job.lamports} lamports to ${job.destination}.`
+            : `${job.lamports} lamports to ${job.destination} was not booked. The hold expires on its own; reconciliation will flag a transfer that landed late.`,
         });
       },
     });
@@ -239,7 +304,11 @@ async function main(): Promise<void> {
   const api = buildControlApi({
     riskOfficer: (m) => officerFor(m),
     submitWithdrawal: withdrawalExecutor
-      ? (job) => { void withdrawalExecutor!.execute(job).catch((err) => log.error({ err: String(err) }, 'withdrawal execution crashed')); }
+      ? (job) => {
+          void withdrawalExecutor
+            .execute(job)
+            .catch((err: unknown) => log.error({ err: String(err) }, 'withdrawal execution crashed'));
+        }
       : undefined,
     control,
     queries,
@@ -266,7 +335,11 @@ async function main(): Promise<void> {
     const t = setInterval(() => {
       if (busy) return;
       busy = true;
-      fn().catch((err) => log.error({ task: name, err: String(err) }, 'housekeeping task failed')).finally(() => { busy = false; });
+      fn()
+        .catch((err: unknown) => log.error({ task: name, err: String(err) }, 'housekeeping task failed'))
+        .finally(() => {
+          busy = false;
+        });
     }, ms);
     timers.push(t);
   };
@@ -324,10 +397,14 @@ async function main(): Promise<void> {
       return;
     }
     const rpc = rpcHealth.snapshot();
-    if (rpc.lastOkAt !== null && !rpc.healthy) await officer.halt('rpc_errors', `rpc error rate ${(rpc.errorRate * 100).toFixed(0)}%`);
+    if (rpc.lastOkAt !== null && !rpc.healthy)
+      await officer.halt('rpc_errors', `rpc error rate ${(rpc.errorRate * 100).toFixed(0)}%`);
   });
 
-  log.info({ mode: activeMode, api: `${cfg.api.host}:${cfg.api.port}`, liveTradingEnabled: cfg.liveTradingEnabled }, 'engine started');
+  log.info(
+    { mode: activeMode, api: `${cfg.api.host}:${cfg.api.port}`, liveTradingEnabled: cfg.liveTradingEnabled },
+    'engine started',
+  );
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -336,9 +413,21 @@ async function main(): Promise<void> {
     log.info({ signal }, 'shutting down');
     for (const t of timers) clearInterval(t);
     solPrice.stop();
-    try { await api.close(); } catch { /* already closed */ }
-    try { await trader.stop(); } catch (err) { log.error({ err: String(err) }, 'trader stop failed'); }
-    try { await scoutBundle.scout.stop(); } catch (err) { log.error({ err: String(err) }, 'scout stop failed'); }
+    try {
+      await api.close();
+    } catch {
+      /* already closed */
+    }
+    try {
+      await trader.stop();
+    } catch (err) {
+      log.error({ err: String(err) }, 'trader stop failed');
+    }
+    try {
+      await scoutBundle.scout.stop();
+    } catch (err) {
+      log.error({ err: String(err) }, 'scout stop failed');
+    }
     await pool.end();
     process.exit(0);
   };
@@ -346,8 +435,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   process.stderr.write(`engine failed to start: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });
-

@@ -1,5 +1,17 @@
 import { randomBytes } from 'node:crypto';
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 
@@ -21,14 +33,20 @@ export const MAX_TRACKED_TICKETS = 100_000;
  */
 export const PRUNE_GRACE_MS = 15 * 60_000;
 
-const StateSchema = z.object({
-  version: z.literal(1),
-  usedTickets: z.array(z.tuple([z.string().min(1).max(128), z.number().int().nonnegative()])).max(MAX_TRACKED_TICKETS),
-  daily: z.object({
-    day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    spentLamports: z.string().regex(/^\d{1,20}$/),
-  }).strict(),
-}).strict();
+const StateSchema = z
+  .object({
+    version: z.literal(1),
+    usedTickets: z
+      .array(z.tuple([z.string().min(1).max(128), z.number().int().nonnegative()]))
+      .max(MAX_TRACKED_TICKETS),
+    daily: z
+      .object({
+        day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        spentLamports: z.string().regex(/^\d{1,20}$/),
+      })
+      .strict(),
+  })
+  .strict();
 
 export function utcDay(nowMs: number): string {
   return new Date(nowMs).toISOString().slice(0, 10);
@@ -48,7 +66,10 @@ export interface CommitInput {
 }
 
 export class SignerStateStore {
-  private constructor(private readonly path: string, private snap: Snapshot) {}
+  private constructor(
+    private readonly path: string,
+    private snap: Snapshot,
+  ) {}
 
   /** Opens (or initialises in memory) the state at `path`. Throws if the file is unsafe or corrupt. */
   static open(path: string, nowMs: number = Date.now()): SignerStateStore {
@@ -58,7 +79,8 @@ export class SignerStateStore {
     if (process.platform !== 'win32') {
       const st = statSync(path);
       if (!st.isFile()) throw new Error('signer state path is not a regular file');
-      if ((st.mode & 0o022) !== 0) throw new Error(`signer state file is writable by group or other; run: chmod 600 ${path}`);
+      if ((st.mode & 0o022) !== 0)
+        throw new Error(`signer state file is writable by group or other; run: chmod 600 ${path}`);
     }
     let raw: unknown;
     try {
@@ -69,7 +91,11 @@ export class SignerStateStore {
     const parsed = StateSchema.safeParse(raw);
     if (!parsed.success) throw new Error('signer state file has an invalid format; refusing to start');
     const s = parsed.data;
-    return new SignerStateStore(path, { usedTickets: new Map(s.usedTickets), day: s.daily.day, spent: BigInt(s.daily.spentLamports) });
+    return new SignerStateStore(path, {
+      usedTickets: new Map(s.usedTickets),
+      day: s.daily.day,
+      spent: BigInt(s.daily.spentLamports),
+    });
   }
 
   isTicketUsed(reservationId: string): boolean {
@@ -140,13 +166,21 @@ export class SignerStateStore {
       if (process.platform !== 'win32') chmodSync(tmp, 0o600);
       renameSync(tmp, this.path);
     } catch (err) {
-      try { unlinkSync(tmp); } catch { /* best effort */ }
+      try {
+        unlinkSync(tmp);
+      } catch {
+        /* best effort */
+      }
       throw err;
     }
     if (process.platform !== 'win32') {
       try {
         const dfd = openSync(dir, 'r');
-        try { fsyncSync(dfd); } finally { closeSync(dfd); }
+        try {
+          fsyncSync(dfd);
+        } finally {
+          closeSync(dfd);
+        }
       } catch {
         // Directory fsync is not supported everywhere; the rename itself is still atomic.
       }

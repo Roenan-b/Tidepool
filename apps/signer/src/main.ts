@@ -17,6 +17,7 @@ async function main(): Promise<void> {
     passphrase = await promptHidden('Keystore passphrase: ');
   }
   const keypair = loadKeystore(config.keystorePath, passphrase);
+  // eslint-disable-next-line no-useless-assignment -- drop the passphrase reference as soon as it is used
   passphrase = '';
   const state = SignerStateStore.open(config.statePath);
   const signer = createSignerServer({ config, keypair, state, logger: jsonLineLogger });
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
 
   const shutdown = (signal: string) => {
     jsonLineLogger({ event: 'signer_stopping', signal });
-    signer.close().finally(() => process.exit(0));
+    void signer.close().finally(() => process.exit(0));
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));

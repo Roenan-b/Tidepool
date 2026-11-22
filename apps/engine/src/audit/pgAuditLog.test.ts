@@ -18,8 +18,20 @@ describe('canonical json', () => {
   it('sorts keys recursively and renders bigints as strings', () => {
     const a = canonicalJson(normalizeJson({ b: 1n, a: { d: [3, { z: 1, y: 2 }], c: 'x' }, u: undefined }));
     expect(a).toBe('{"a":{"c":"x","d":[3,{"y":2,"z":1}]},"b":"1"}');
-    const h1 = eventHash(GENESIS_HASH, { at: '2026-01-01T00:00:00.000Z', actor: 'risk', type: 't', ref: null, payload: { x: 1, y: 2 } });
-    const h2 = eventHash(GENESIS_HASH, { at: '2026-01-01T00:00:00.000Z', actor: 'risk', type: 't', ref: null, payload: { y: 2, x: 1 } });
+    const h1 = eventHash(GENESIS_HASH, {
+      at: '2026-01-01T00:00:00.000Z',
+      actor: 'risk',
+      type: 't',
+      ref: null,
+      payload: { x: 1, y: 2 },
+    });
+    const h2 = eventHash(GENESIS_HASH, {
+      at: '2026-01-01T00:00:00.000Z',
+      actor: 'risk',
+      type: 't',
+      ref: null,
+      payload: { y: 2, x: 1 },
+    });
     expect(h1).toBe(h2);
     expect(h1).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -27,16 +39,32 @@ describe('canonical json', () => {
 
 describe('PgAuditLog', () => {
   it('chains appends from the genesis hash and verifies', async () => {
-    const first = await audit.append({ actor: 'system', type: 'boot', payload: { amount: 123456789012345678901234567890n, nested: { b: 2, a: 1 }, when: new Date(0) } });
-    const rows = await db.pool.query<{ prev_hash: string; hash: string }>('SELECT prev_hash, hash FROM audit_events WHERE seq = $1', [first.seq]);
+    const first = await audit.append({
+      actor: 'system',
+      type: 'boot',
+      payload: { amount: 123456789012345678901234567890n, nested: { b: 2, a: 1 }, when: new Date(0) },
+    });
+    const rows = await db.pool.query<{ prev_hash: string; hash: string }>(
+      'SELECT prev_hash, hash FROM audit_events WHERE seq = $1',
+      [first.seq],
+    );
     expect(rows.rows[0]!.prev_hash).toBe(GENESIS_HASH);
     expect(rows.rows[0]!.hash).toBe(first.hash);
-    await audit.append({ actor: 'risk', type: 'x', ref: 'r1', payload: { f: 0.1 + 0.2, s: 'héllo "q"', arr: [1, null, 'a'] } });
+    await audit.append({
+      actor: 'risk',
+      type: 'x',
+      ref: 'r1',
+      payload: { f: 0.1 + 0.2, s: 'héllo "q"', arr: [1, null, 'a'] },
+    });
     expect(await audit.verify()).toMatchObject({ ok: true, brokenAt: null });
   });
 
   it('does not fork under concurrent appends', async () => {
-    await Promise.all(Array.from({ length: 200 }, (_, i) => audit.append({ actor: 'trader', type: 'concurrent', ref: String(i), payload: { i } })));
+    await Promise.all(
+      Array.from({ length: 200 }, (_, i) =>
+        audit.append({ actor: 'trader', type: 'concurrent', ref: String(i), payload: { i } }),
+      ),
+    );
     const v = await audit.verify();
     expect(v.ok).toBe(true);
     const dupPrev = await db.pool.query('SELECT prev_hash FROM audit_events GROUP BY prev_hash HAVING count(*) > 1');
@@ -55,7 +83,9 @@ describe('PgAuditLog', () => {
     } finally {
       client.release();
     }
-    const r = await db.pool.query<{ type: string }>(`SELECT type FROM audit_events WHERE type IN ('rolled_back','committed')`);
+    const r = await db.pool.query<{ type: string }>(
+      `SELECT type FROM audit_events WHERE type IN ('rolled_back','committed')`,
+    );
     expect(r.rows.map((x) => x.type)).toEqual(['committed']);
     expect((await audit.verify()).ok).toBe(true);
   });
@@ -112,8 +142,16 @@ describe('tamper detection by a privileged user', () => {
 describe('review regressions: unstorable characters', () => {
   it('stores payloads, keys and refs containing NUL or unpaired surrogates and still verifies', async () => {
     // Token metadata is untrusted; Postgres jsonb rejects \u0000 and lone surrogates, which used to abort the caller's transaction.
-    const r = await audit.append({ actor: 'risk', type: 'reservation_approved', ref: 'mint\u0000x', payload: { symbol: 'EVIL\u0000COIN', lone: 'a\udc00b', ['k\u0000']: 1, ok: 'a\u{1F600}b' } });
-    const row = await db.pool.query<{ ref: string; payload: Record<string, unknown> }>('SELECT ref, payload FROM audit_events WHERE seq = $1', [r.seq]);
+    const r = await audit.append({
+      actor: 'risk',
+      type: 'reservation_approved',
+      ref: 'mint\u0000x',
+      payload: { symbol: 'EVIL\u0000COIN', lone: 'a\udc00b', ['k\u0000']: 1, ok: 'a\u{1F600}b' },
+    });
+    const row = await db.pool.query<{ ref: string; payload: Record<string, unknown> }>(
+      'SELECT ref, payload FROM audit_events WHERE seq = $1',
+      [r.seq],
+    );
     expect(row.rows[0]!.ref).toBe('mint�x');
     expect(row.rows[0]!.payload).toEqual({ symbol: 'EVIL�COIN', lone: 'a�b', ['k�']: 1, ok: 'a\u{1F600}b' });
     // An earlier test in this file deliberately forges a row, so verify from this event onwards.

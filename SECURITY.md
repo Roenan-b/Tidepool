@@ -2,6 +2,15 @@
 
 Tidepool handles trading decisions and, in live mode, a hot wallet. Security reports are taken seriously.
 
+## Supported versions
+
+Only the latest release on `main` receives security fixes.
+
+| Version | Supported |
+| ------- | --------- |
+| 0.1.x   | Yes       |
+| < 0.1   | No        |
+
 ## Reporting a vulnerability
 
 Please do not open a public issue for a security problem. Use GitHub's private vulnerability reporting instead: open the **Security** tab of this repository and choose **Report a vulnerability**.

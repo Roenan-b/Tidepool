@@ -1,5 +1,6 @@
 'use client';
 /** Top menu-bar strip: brand, navigation, mode badge, appearance toggle, clock and sign out. */
+import Link from 'next/link';
 import { useState } from 'react';
 import { postJson, useNow } from './client.js';
 import { ModeBadge } from './WindowFrame.js';
@@ -16,7 +17,13 @@ export interface MenuViewer {
   totpEnabled: boolean;
 }
 
-export function MenuBar(props: { viewer: MenuViewer | null; active: 'home' | 'ops' | 'security' | 'login'; mode?: 'paper' | 'live' | null; showMode?: boolean; theme: Theme }) {
+export function MenuBar(props: {
+  viewer: MenuViewer | null;
+  active: 'home' | 'ops' | 'security' | 'login';
+  mode?: 'paper' | 'live' | null;
+  showMode?: boolean;
+  theme: Theme;
+}) {
   const now = useNow(1000);
   const [theme, setTheme] = useState<Theme>(props.theme);
   const v = props.viewer;
@@ -42,34 +49,58 @@ export function MenuBar(props: { viewer: MenuViewer | null; active: 'home' | 'op
 
   return (
     <nav className="menubar" aria-label="Main">
-      <a className="skip-link" href="#main">Skip to content</a>
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <span className="menubar-brand">
         <span className="brand-mark" aria-hidden="true" />
         <span className="hide-xs">Tidepool</span>
       </span>
       {canHome ? (
-        <a href="/" aria-current={props.active === 'home' ? 'page' : undefined}>Home</a>
+        <Link href="/" aria-current={props.active === 'home' ? 'page' : undefined}>
+          Home
+        </Link>
       ) : null}
       {canOps ? (
-        <a href="/ops" aria-current={props.active === 'ops' ? 'page' : undefined}>Operations</a>
+        <Link href="/ops" aria-current={props.active === 'ops' ? 'page' : undefined}>
+          Operations
+        </Link>
       ) : null}
       {v && !v.demo ? (
-        <a className="hide-narrow" href="/settings/security" aria-current={props.active === 'security' ? 'page' : undefined}>Security</a>
+        <Link
+          className="hide-narrow"
+          href="/settings/security"
+          aria-current={props.active === 'security' ? 'page' : undefined}
+        >
+          Security
+        </Link>
       ) : null}
       <span className="menubar-spacer" />
-      {v?.demo ? <span className="badge badge-demo" title="Sample data; actions are disabled">Demo</span> : null}
+      {v?.demo ? (
+        <span className="badge badge-demo" title="Sample data; actions are disabled">
+          Demo
+        </span>
+      ) : null}
       {props.showMode ? <ModeBadge mode={props.mode ?? null} /> : null}
-      <button type="button" className="menu-item" onClick={cycleTheme} aria-label={`Appearance: ${THEME_LABEL[theme]}. Change appearance`}>
+      <button
+        type="button"
+        className="menu-item"
+        onClick={cycleTheme}
+        aria-label={`Appearance: ${THEME_LABEL[theme]}. Change appearance`}
+      >
         <span aria-hidden="true">{theme === 'dark' ? '☾' : theme === 'light' ? '☀' : '◐'}</span>
         <span className="hide-narrow"> {THEME_LABEL[theme]}</span>
       </button>
       <span className="menubar-clock hide-xs" aria-label="Current time">
-        {now
-          ? now.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-          : ' '}
+        {now ? now.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : ' '}
       </span>
       {v && !v.demo ? (
-        <button type="button" className="menu-item" onClick={signOut} aria-label={`Sign out ${v.username}`}>
+        <button
+          type="button"
+          className="menu-item"
+          onClick={() => void signOut()}
+          aria-label={`Sign out ${v.username}`}
+        >
           Sign out
         </button>
       ) : null}

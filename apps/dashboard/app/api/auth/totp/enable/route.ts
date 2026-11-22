@@ -33,9 +33,17 @@ export async function POST(req: NextRequest) {
       case 'already_enabled':
         return errorJson(409, 'already_enabled', 'Two-factor sign-in is already on.');
       case 'locked':
-        return errorJson(429, 'locked', `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`);
+        return errorJson(
+          429,
+          'locked',
+          `Too many failed attempts. Try again in ${r.minutes} minute${r.minutes === 1 ? '' : 's'}.`,
+        );
       case 'invalid':
-        return errorJson(400, 'invalid_code', 'That code did not match. Check the time on your phone and try the next code.');
+        return errorJson(
+          400,
+          'invalid_code',
+          'That code did not match. Check the time on your phone and try the next code.',
+        );
     }
   } catch (err) {
     console.error('[dashboard] totp enable failed:', err instanceof Error ? err.message : 'unknown error');

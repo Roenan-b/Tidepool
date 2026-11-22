@@ -27,7 +27,15 @@ beforeEach(async () => {
   audit = new PgAuditLog({ pool: db.pool, clock });
   alerter = new MemoryAlerter();
   solUsd = null;
-  ro = new PgRiskOfficer({ pool: db.pool, audit, clock, mode: 'paper', preset: presets.resolver, solUsd: () => solUsd, alerter });
+  ro = new PgRiskOfficer({
+    pool: db.pool,
+    audit,
+    clock,
+    mode: 'paper',
+    preset: presets.resolver,
+    solUsd: () => solUsd,
+    alerter,
+  });
   await ro.fundPaperPool(10n * SOL);
   const s = await ro.start('balanced');
   expect(s.ok).toBe(true);
@@ -44,7 +52,9 @@ describe('reserve concurrency', () => {
     expect(approved).toHaveLength(198);
     for (const d of decisions) if (!d.approved) expect(d.reason).toBe('insufficient_free_cash');
 
-    const held = await db.pool.query<{ s: string; n: string }>(`SELECT coalesce(sum(lamports),0)::text AS s, count(*)::text AS n FROM reservations WHERE status = 'held'`);
+    const held = await db.pool.query<{ s: string; n: string }>(
+      `SELECT coalesce(sum(lamports),0)::text AS s, count(*)::text AS n FROM reservations WHERE status = 'held'`,
+    );
     expect(BigInt(held.rows[0]!.s)).toBe(198n * each);
     expect(BigInt(held.rows[0]!.s)).toBeLessThanOrEqual(10n * SOL - presets.current.limits.feeReserveLamports);
 
@@ -81,7 +91,10 @@ describe('reserve concurrency', () => {
   it('vetoes a reused key with different parameters', async () => {
     const r = request(fakeMint(), SOL / 10n, clock);
     expect((await ro.reserve(r)).approved).toBe(true);
-    expect(await ro.reserve({ ...r, lamports: SOL / 5n })).toEqual({ approved: false, reason: 'idempotency_key_conflict' });
+    expect(await ro.reserve({ ...r, lamports: SOL / 5n })).toEqual({
+      approved: false,
+      reason: 'idempotency_key_conflict',
+    });
   });
 });
 
@@ -102,15 +115,32 @@ describe('reserve limits', () => {
     presets.current = testPreset({ limits: { maxOpenPositions: 2 } });
     const a = await ro.reserve(request(fakeMint(), SOL / 10n, clock));
     expect(a.approved).toBe(true);
-    if (a.approved) await ro.recordFill({ reservationId: a.reservationId, orderId: 'o1', mint: (await db.pool.query('SELECT mint FROM reservations WHERE id=$1', [a.reservationId])).rows[0].mint, symbol: 'A', strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 1000n, entryPriceUsd: 1, signature: null });
+    if (a.approved)
+      await ro.recordFill({
+        reservationId: a.reservationId,
+        orderId: 'o1',
+        mint: (await db.pool.query('SELECT mint FROM reservations WHERE id=$1', [a.reservationId])).rows[0].mint,
+        symbol: 'A',
+        strategy: 'momentum-v1',
+        lamportsSpent: SOL / 10n,
+        tokenAmount: 1000n,
+        entryPriceUsd: 1,
+        signature: null,
+      });
     expect((await ro.reserve(request(fakeMint(), SOL / 10n, clock))).approved).toBe(true);
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({ approved: false, reason: 'max_open_positions' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock))).toEqual({
+      approved: false,
+      reason: 'max_open_positions',
+    });
   });
 
   it('per-position cap', async () => {
     presets.current = testPreset({ limits: { maxPositionBps: 500 } }); // 0.5 SOL of 10 SOL
     expect((await ro.reserve(request(fakeMint(), SOL / 2n, clock))).approved).toBe(true);
-    expect(await ro.reserve(request(fakeMint(), SOL / 2n + 1n, clock))).toEqual({ approved: false, reason: 'max_position_size' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 2n + 1n, clock))).toEqual({
+      approved: false,
+      reason: 'max_position_size',
+    });
   });
 
   it('per-token exposure cap', async () => {
@@ -124,22 +154,38 @@ describe('reserve limits', () => {
   it('sleeve headroom', async () => {
     await db.pool.query(`INSERT INTO sleeves (mode, name, alloc_bps) VALUES ('paper', 'alt', 500)`);
     expect((await ro.reserve(request(fakeMint(), (4n * SOL) / 10n, clock, { sleeve: 'alt' }))).approved).toBe(true);
-    expect(await ro.reserve(request(fakeMint(), (2n * SOL) / 10n, clock, { sleeve: 'alt' }))).toEqual({ approved: false, reason: 'sleeve_headroom' });
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { sleeve: 'nope' }))).toEqual({ approved: false, reason: 'unknown_sleeve' });
+    expect(await ro.reserve(request(fakeMint(), (2n * SOL) / 10n, clock, { sleeve: 'alt' }))).toEqual({
+      approved: false,
+      reason: 'sleeve_headroom',
+    });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { sleeve: 'nope' }))).toEqual({
+      approved: false,
+      reason: 'unknown_sleeve',
+    });
   });
 
   it('fee reserve is never allocatable', async () => {
     presets.current = testPreset({ limits: { feeReserveLamports: 9n * SOL + SOL / 2n } }); // free = 0.5 SOL
-    expect(await ro.reserve(request(fakeMint(), SOL / 2n + 1n, clock))).toEqual({ approved: false, reason: 'insufficient_free_cash' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 2n + 1n, clock))).toEqual({
+      approved: false,
+      reason: 'insufficient_free_cash',
+    });
     expect((await ro.reserve(request(fakeMint(), SOL / 2n, clock))).approved).toBe(true);
   });
 
   it('position share of liquidity (reported and estimated from SOL price)', async () => {
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { positionShareOfLiquidity: 0.02 }))).toEqual({ approved: false, reason: 'liquidity_share' });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { positionShareOfLiquidity: 0.02 }))).toEqual({
+      approved: false,
+      reason: 'liquidity_share',
+    });
     solUsd = 2000; // 0.5 SOL = $1,000 vs $20,000 liquidity = 5%
     const r = request(fakeMint(), SOL / 2n, clock, { positionShareOfLiquidity: 0, safety: { liquidityUsd: 20_000 } });
     expect(await ro.reserve(r)).toEqual({ approved: false, reason: 'liquidity_share' });
-    expect(await ro.reserve(request(fakeMint(), SOL / 2n, clock, { positionShareOfLiquidity: 0.001, safety: { liquidityUsd: 2_000_000 } }))).toMatchObject({ approved: true });
+    expect(
+      await ro.reserve(
+        request(fakeMint(), SOL / 2n, clock, { positionShareOfLiquidity: 0.001, safety: { liquidityUsd: 2_000_000 } }),
+      ),
+    ).toMatchObject({ approved: true });
   });
 
   it.each([
@@ -156,19 +202,44 @@ describe('reserve limits', () => {
     [{ creatorFlagged: true }, 'safety:creator_flagged'],
     [{ liquidityUsd: Number.NaN }, 'safety:min_liquidity'],
   ] as const)('safety filter %o vetoes with %s', async (safety, reason) => {
-    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { safety: safety as never }))).toEqual({ approved: false, reason });
+    expect(await ro.reserve(request(fakeMint(), SOL / 10n, clock, { safety: safety as never }))).toEqual({
+      approved: false,
+      reason,
+    });
   });
 
   it('allowed Token-2022 extensions pass', async () => {
-    expect((await ro.reserve(request(fakeMint(), SOL / 10n, clock, { safety: { token2022Extensions: ['metadataPointer'] } }))).approved).toBe(true);
+    expect(
+      (
+        await ro.reserve(
+          request(fakeMint(), SOL / 10n, clock, { safety: { token2022Extensions: ['metadataPointer'] } }),
+        )
+      ).approved,
+    ).toBe(true);
   });
 
   it('cooldown after a stop-loss exit', async () => {
     const mint = fakeMint();
     const d = await ro.reserve(request(mint, SOL / 10n, clock));
     if (!d.approved) throw new Error('expected approval');
-    const { positionId } = await ro.recordFill({ reservationId: d.reservationId, orderId: 'o', mint, symbol: 'X', strategy: 'momentum-v1', lamportsSpent: SOL / 10n, tokenAmount: 10n, entryPriceUsd: 1, signature: null });
-    await ro.recordExit({ positionId, orderId: 'o2', lamportsReceived: SOL / 20n, reason: 'stop_loss', signature: null });
+    const { positionId } = await ro.recordFill({
+      reservationId: d.reservationId,
+      orderId: 'o',
+      mint,
+      symbol: 'X',
+      strategy: 'momentum-v1',
+      lamportsSpent: SOL / 10n,
+      tokenAmount: 10n,
+      entryPriceUsd: 1,
+      signature: null,
+    });
+    await ro.recordExit({
+      positionId,
+      orderId: 'o2',
+      lamportsReceived: SOL / 20n,
+      reason: 'stop_loss',
+      signature: null,
+    });
     expect(await ro.reserve(request(mint, SOL / 10n, clock))).toEqual({ approved: false, reason: 'cooldown' });
     clock.advance(presets.current.filters.cooldownAfterStopSeconds * 1000 + 1);
     expect((await ro.reserve(request(mint, SOL / 10n, clock))).approved).toBe(true);
@@ -179,9 +250,18 @@ describe('reserve limits', () => {
     const r = request(mint, SOL / 10n, clock);
     clock.advance(10 * 60_000);
     expect(await ro.reserve(r)).toEqual({ approved: false, reason: 'candidate_expired' });
-    expect(await ro.reserve({ ...request(mint, 0n, clock) })).toEqual({ approved: false, reason: 'invalid_request:lamports' });
-    expect(await ro.reserve({ ...request(mint, SOL, clock), mint: 'not-a-mint' })).toEqual({ approved: false, reason: 'invalid_request:mint' });
-    expect(await ro.reserve({ ...request(mint, SOL, clock), positionShareOfLiquidity: Number.NaN })).toEqual({ approved: false, reason: 'invalid_request:liquidity_share' });
+    expect(await ro.reserve({ ...request(mint, 0n, clock) })).toEqual({
+      approved: false,
+      reason: 'invalid_request:lamports',
+    });
+    expect(await ro.reserve({ ...request(mint, SOL, clock), mint: 'not-a-mint' })).toEqual({
+      approved: false,
+      reason: 'invalid_request:mint',
+    });
+    expect(await ro.reserve({ ...request(mint, SOL, clock), positionShareOfLiquidity: Number.NaN })).toEqual({
+      approved: false,
+      reason: 'invalid_request:liquidity_share',
+    });
   });
 
   it('expires stale reservations and frees their cash', async () => {

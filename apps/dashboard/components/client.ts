@@ -26,7 +26,11 @@ async function readError(res: Response): Promise<string> {
  * Polls a same-origin JSON endpoint. Stops while the tab is hidden and fetches immediately when it
  * becomes visible again. Errors back off exponentially up to 30 seconds; the last good data stays shown.
  */
-export function usePoll<T>(url: string | null, intervalMs: number, initial: T | null = null): PollState<T> & { refresh: () => void } {
+export function usePoll<T>(
+  url: string | null,
+  intervalMs: number,
+  initial: T | null = null,
+): PollState<T> & { refresh: () => void } {
   const [state, setState] = useState<PollState<T>>({
     data: initial,
     error: null,
@@ -47,7 +51,7 @@ export function usePoll<T>(url: string | null, intervalMs: number, initial: T | 
     const schedule = () => {
       if (stopped || document.hidden) return;
       const delay = failures > 0 ? Math.min(intervalMs * 2 ** failures, MAX_BACKOFF_MS) : intervalMs;
-      timer = setTimeout(run, delay);
+      timer = setTimeout(() => void run(), delay);
     };
 
     const run = async () => {
@@ -122,7 +126,9 @@ export async function postJson<T = unknown>(url: string, body: unknown = {}): Pr
     return {
       ok: false,
       status: 0,
-      message: aborted ? 'The request timed out. Check the status before trying again.' : 'Cannot reach the dashboard server.',
+      message: aborted
+        ? 'The request timed out. Check the status before trying again.'
+        : 'Cannot reach the dashboard server.',
     };
   } finally {
     clearTimeout(timeout);
@@ -141,7 +147,10 @@ export function useNow(everyMs = 1000): Date | null {
 }
 
 /** Flash message shown in a polite live region, cleared after a few seconds. */
-export function useToast(): { toast: { kind: 'ok' | 'error'; text: string } | null; show: (kind: 'ok' | 'error', text: string) => void } {
+export function useToast(): {
+  toast: { kind: 'ok' | 'error'; text: string } | null;
+  show: (kind: 'ok' | 'error', text: string) => void;
+} {
   const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const show = useCallback((kind: 'ok' | 'error', text: string) => {
@@ -149,8 +158,17 @@ export function useToast(): { toast: { kind: 'ok' | 'error'; text: string } | nu
     setToast({ kind, text });
     timer.current = setTimeout(() => setToast(null), kind === 'error' ? 9000 : 5000);
   }, []);
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   return { toast, show };
+}
+
+/** Reads a text field from a form, treating a missing or non-text value as empty. */
+export function formText(form: FormData, name: string): string {
+  const v = form.get(name);
+  return typeof v === 'string' ? v : '';
 }

@@ -29,7 +29,9 @@ describe('AES-256-GCM secret box', () => {
     const parts = env.split('.');
     const tag = Buffer.from(parts[2]!, 'base64url');
     tag[3] = tag[3]! ^ 0xff;
-    expect(() => decryptSecret([parts[0], parts[1], tag.toString('base64url'), parts[3]].join('.'), key, 'user-1')).toThrow();
+    expect(() =>
+      decryptSecret([parts[0], parts[1], tag.toString('base64url'), parts[3]].join('.'), key, 'user-1'),
+    ).toThrow();
     expect(() => decryptSecret(env, randomBytes(32), 'user-1')).toThrow();
     expect(() => decryptSecret(env, key, 'user-2')).toThrow();
   });

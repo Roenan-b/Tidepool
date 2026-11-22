@@ -7,7 +7,11 @@ import type { RiskOfficer, ReservationRequest, ReservationDecision, SafetyChecke
  * for the exact size), rather than on the copy the Scout attached when it ranked the token.
  * If the fresh check fails for any reason the request is vetoed (fail closed).
  */
-export function withFreshSafety(risk: RiskOfficer, checker: SafetyChecker, onError?: (mint: string, err: unknown) => void): RiskOfficer {
+export function withFreshSafety(
+  risk: RiskOfficer,
+  checker: SafetyChecker,
+  onError?: (mint: string, err: unknown) => void,
+): RiskOfficer {
   const reserve = async (req: ReservationRequest): Promise<ReservationDecision> => {
     let fresh;
     try {
@@ -23,8 +27,8 @@ export function withFreshSafety(risk: RiskOfficer, checker: SafetyChecker, onErr
   return new Proxy(risk, {
     get(target, prop, receiver) {
       if (prop === 'reserve') return reserve;
-      const v = Reflect.get(target, prop, receiver);
-      return typeof v === 'function' ? v.bind(target) : v;
+      const v: unknown = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? (v as (...args: unknown[]) => unknown).bind(target) : v;
     },
   });
 }

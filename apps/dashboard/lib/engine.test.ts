@@ -13,7 +13,10 @@ describe('engineRequest', () => {
       seen = { url, init };
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     };
-    const r = await engineRequest({ method: 'POST', path: '/control/start', body: { preset: 'balanced' }, viewer }, { fetch: fake, config });
+    const r = await engineRequest(
+      { method: 'POST', path: '/control/start', body: { preset: 'balanced' }, viewer },
+      { fetch: fake, config },
+    );
     expect(r).toEqual({ ok: true, data: { ok: true } });
     expect(seen!.url).toBe('http://127.0.0.1:7070/control/start');
     const h = seen!.init.headers as Record<string, string>;
@@ -27,26 +30,61 @@ describe('engineRequest', () => {
     let url = '';
     await engineRequest(
       { method: 'GET', path: '/events', query: new URLSearchParams('limit=5'), viewer },
-      { fetch: async (u) => { url = u; return new Response('[]'); }, config },
+      {
+        fetch: async (u) => {
+          url = u;
+          return new Response('[]');
+        },
+        config,
+      },
     );
     expect(url).toBe('http://127.0.0.1:7070/events?limit=5');
   });
 
   it('maps network failures to a friendly unreachable error', async () => {
-    const r = await engineRequest({ method: 'GET', path: '/status', viewer }, { fetch: async () => { throw new TypeError('fetch failed'); }, config });
+    const r = await engineRequest(
+      { method: 'GET', path: '/status', viewer },
+      {
+        fetch: async () => {
+          throw new TypeError('fetch failed');
+        },
+        config,
+      },
+    );
     expect(r).toMatchObject({ ok: false, status: 502, error: 'engine_unreachable' });
   });
 
   it('passes short 4xx messages and hides 5xx details', async () => {
-    const r4 = await engineRequest({ method: 'POST', path: '/control/start', viewer }, { fetch: async () => new Response(JSON.stringify({ error: 'halted', message: 'Engine is halted' }), { status: 409 }), config });
+    const r4 = await engineRequest(
+      { method: 'POST', path: '/control/start', viewer },
+      {
+        fetch: async () =>
+          new Response(JSON.stringify({ error: 'halted', message: 'Engine is halted' }), { status: 409 }),
+        config,
+      },
+    );
     expect(r4).toMatchObject({ ok: false, status: 409, error: 'halted', message: 'Engine is halted' });
-    const r5 = await engineRequest({ method: 'GET', path: '/status', viewer }, { fetch: async () => new Response(JSON.stringify({ message: 'stack trace at db.ts:42' }), { status: 500 }), config });
+    const r5 = await engineRequest(
+      { method: 'GET', path: '/status', viewer },
+      {
+        fetch: async () => new Response(JSON.stringify({ message: 'stack trace at db.ts:42' }), { status: 500 }),
+        config,
+      },
+    );
     expect(r5.ok).toBe(false);
     if (!r5.ok) expect(r5.message).not.toContain('stack');
   });
 
   it('never forwards to the engine without a token', async () => {
-    const r = await engineRequest({ method: 'GET', path: '/status', viewer }, { fetch: async () => { throw new Error('should not be called'); }, config: loadConfig({}) });
+    const r = await engineRequest(
+      { method: 'GET', path: '/status', viewer },
+      {
+        fetch: async () => {
+          throw new Error('should not be called');
+        },
+        config: loadConfig({}),
+      },
+    );
     expect(r).toMatchObject({ ok: false, error: 'engine_not_configured' });
   });
 
@@ -59,13 +97,19 @@ describe('engineRequest', () => {
         c.enqueue(chunk);
       },
     });
-    const r = await engineRequest({ method: 'GET', path: '/status', viewer }, { fetch: async () => new Response(endless), config });
+    const r = await engineRequest(
+      { method: 'GET', path: '/status', viewer },
+      { fetch: async () => new Response(endless), config },
+    );
     expect(r).toMatchObject({ ok: false, error: 'engine_response_too_large' });
     expect(pulled).toBeLessThan(40); // 2 MiB limit / 64 KiB chunks = 32, plus a small read-ahead
   });
 
   it('rejects non-JSON responses', async () => {
-    const r = await engineRequest({ method: 'GET', path: '/status', viewer }, { fetch: async () => new Response('<html>'), config });
+    const r = await engineRequest(
+      { method: 'GET', path: '/status', viewer },
+      { fetch: async () => new Response('<html>'), config },
+    );
     expect(r).toMatchObject({ ok: false, error: 'engine_bad_response' });
   });
 });

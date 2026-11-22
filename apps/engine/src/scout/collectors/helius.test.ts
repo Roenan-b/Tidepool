@@ -43,7 +43,15 @@ function createEventB64(): string {
     l.writeUInt32LE(b.length);
     return Buffer.concat([l, b]);
   };
-  return Buffer.concat([anchorEventDiscriminator('CreateEvent'), s('N'), s('S'), s('u'), MINT.toBuffer(), Buffer.alloc(32, 2), Buffer.alloc(32, 3)]).toString('base64');
+  return Buffer.concat([
+    anchorEventDiscriminator('CreateEvent'),
+    s('N'),
+    s('S'),
+    s('u'),
+    MINT.toBuffer(),
+    Buffer.alloc(32, 2),
+    Buffer.alloc(32, 3),
+  ]).toString('base64');
 }
 
 describe('HeliusStreamCollector', () => {
@@ -85,7 +93,10 @@ describe('HeliusStreamCollector', () => {
     c.start();
     sockets[0]!.open();
     const sub = JSON.parse(sockets[0]!.sent[0]!);
-    expect(sub).toMatchObject({ method: 'logsSubscribe', params: [{ mentions: [PUMP_FUN_PROGRAM_ID] }, { commitment: 'confirmed' }] });
+    expect(sub).toMatchObject({
+      method: 'logsSubscribe',
+      params: [{ mentions: [PUMP_FUN_PROGRAM_ID] }, { commitment: 'confirmed' }],
+    });
     sockets[0]!.deliver({ jsonrpc: '2.0', result: 77, id: 1 });
     sockets[0]!.deliver({
       jsonrpc: '2.0',
@@ -97,13 +108,23 @@ describe('HeliusStreamCollector', () => {
           value: {
             signature: 'sigA',
             err: null,
-            logs: [`Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`, 'Program log: Instruction: Create', `Program data: ${createEventB64()}`, `Program ${PUMP_FUN_PROGRAM_ID} success`],
+            logs: [
+              `Program ${PUMP_FUN_PROGRAM_ID} invoke [1]`,
+              'Program log: Instruction: Create',
+              `Program data: ${createEventB64()}`,
+              `Program ${PUMP_FUN_PROGRAM_ID} success`,
+            ],
           },
         },
       },
     });
     expect(sink.events).toHaveLength(1);
-    expect(sink.events[0]).toMatchObject({ source: 'helius', kind: 'new_token', mint: MINT.toBase58(), payload: { signature: 'sigA', slot: 5 } });
+    expect(sink.events[0]).toMatchObject({
+      source: 'helius',
+      kind: 'new_token',
+      mint: MINT.toBase58(),
+      payload: { signature: 'sigA', slot: 5 },
+    });
     await c.stop();
   });
 

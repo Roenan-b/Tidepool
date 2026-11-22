@@ -34,27 +34,27 @@ export interface TokenSafety {
 export interface CandidateFeatures {
   liquidityUsd: number;
   volume5mUsd: number;
-  volumeTrend: number;        // ratio of last 5m volume to the prior 30m average per 5m
+  volumeTrend: number; // ratio of last 5m volume to the prior 30m average per 5m
   priceChange5mPct: number;
   holderCount: number;
-  holderGrowth15m: number;    // ratio
-  mentionVelocity: number;    // quality-weighted mentions per minute, decayed
-  sentiment: number;          // -1..1, quality-weighted
+  holderGrowth15m: number; // ratio
+  mentionVelocity: number; // quality-weighted mentions per minute, decayed
+  sentiment: number; // -1..1, quality-weighted
   narrativeLabel: string | null;
   narrativeScore: number | null; // 0..1 from the asynchronous classifier, null if not scored yet
-  boosted: boolean;           // paid DEX Screener promotion
+  boosted: boolean; // paid DEX Screener promotion
 }
 
 export interface Candidate {
   mint: string;
   symbol: string;
   pairAddress: string;
-  score: number;              // 0..100
+  score: number; // 0..100
   features: CandidateFeatures;
   safety: TokenSafety;
   reasons: string[];
-  observedAt: string;         // ISO time
-  expiresAt: string;          // ISO time
+  observedAt: string; // ISO time
+  expiresAt: string; // ISO time
   priceUsd: number;
 }
 
@@ -65,8 +65,8 @@ export interface Position {
   strategy: string;
   mode: TradingMode;
   status: 'open' | 'closing' | 'closed';
-  entryLamports: bigint;       // SOL spent including fees
-  tokenAmount: bigint;         // raw token units
+  entryLamports: bigint; // SOL spent including fees
+  tokenAmount: bigint; // raw token units
   entryPriceUsd: number;
   openedAt: string;
   closedAt: string | null;

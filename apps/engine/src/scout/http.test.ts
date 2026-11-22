@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { HttpClient, HttpError, SchemaError } from './http.js';
 import { TokenBucket } from './util.js';
 
-function scripted(responses: Array<Response | Error>) {
-  const calls: Array<{ url: string; init?: RequestInit }> = [];
+function scripted(responses: (Response | Error)[]) {
+  const calls: { url: string; init?: RequestInit }[] = [];
   const fetch = async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     const r = responses.shift();
@@ -24,7 +24,12 @@ describe('HttpClient', () => {
   it('retries on 429 and 5xx with backoff, then succeeds', async () => {
     const s = scripted([json({}, 429), json({}, 503), json({ ok: true })]);
     const sleeps: number[] = [];
-    const c = new HttpClient({ fetch: s.fetch, maxRetries: 3, sleep: async (ms) => void sleeps.push(ms), random: () => 0.5 });
+    const c = new HttpClient({
+      fetch: s.fetch,
+      maxRetries: 3,
+      sleep: async (ms) => void sleeps.push(ms),
+      random: () => 0.5,
+    });
     await expect(c.json('https://api.example.com/x', schema)).resolves.toEqual({ ok: true });
     expect(s.calls).toHaveLength(3);
     expect(sleeps).toHaveLength(2);
@@ -90,7 +95,9 @@ describe('HttpClient', () => {
     const c2 = new HttpClient({ fetch: streamed.fetch, maxBodyBytes: 1_000 });
     await expect(c2.json('https://api.example.com/x', schema)).rejects.toBeInstanceOf(SchemaError);
     const small = scripted([json({ ok: true })]);
-    await expect(new HttpClient({ fetch: small.fetch, maxBodyBytes: 1_000 }).json('https://api.example.com/x', schema)).resolves.toEqual({ ok: true });
+    await expect(
+      new HttpClient({ fetch: small.fetch, maxBodyBytes: 1_000 }).json('https://api.example.com/x', schema),
+    ).resolves.toEqual({ ok: true });
 
     const denied = scripted([json({}, 401)]);
     const c3 = new HttpClient({ fetch: denied.fetch, secrets: ['PATHSECRET'] });
@@ -100,7 +107,12 @@ describe('HttpClient', () => {
 
   it('consults the rate limiter before every attempt', async () => {
     let t = 0;
-    const limiter = new TokenBucket(1, 1, () => t, async (ms) => void (t += ms));
+    const limiter = new TokenBucket(
+      1,
+      1,
+      () => t,
+      async (ms) => void (t += ms),
+    );
     const s = scripted([json({}, 429), json({ ok: true })]);
     const c = new HttpClient({ fetch: s.fetch, sleep: async () => undefined });
     await c.json('https://api.example.com/x', schema, { limiter });

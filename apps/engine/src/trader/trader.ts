@@ -11,14 +11,51 @@
  * with the ticket that reservation carries. Exits never depend on the halt state.
  */
 import { randomUUID } from 'node:crypto';
-import { getPreset, txOverheadLamports, type Candidate, type EngineState, type Preset, type PresetName } from '@tidepool/core';
-import type { SignedTicket } from '@tidepool/core/ticket';
-import { systemClock, type AuditLog, type Broker, type CandidateSource, type Clock, type EngineControl, type ExitReport, type FillReport, type OpenPositionView, type RiskOfficer } from '../contracts.js';
 import {
-  candidateLiquidityUsd, configVersion, decideEntry, decideExit, effectiveCostModel, entryIdempotencyKey, estimateExitNetLamports,
-  liquidityUsdToLamports, momentumParams, screenCandidate, sizeEntry, type MomentumParams,
+  getPreset,
+  txOverheadLamports,
+  type Candidate,
+  type EngineState,
+  type Preset,
+  type PresetName,
+} from '@tidepool/core';
+import type { SignedTicket } from '@tidepool/core/ticket';
+import {
+  systemClock,
+  type AuditLog,
+  type Broker,
+  type CandidateSource,
+  type Clock,
+  type EngineControl,
+  type ExitReport,
+  type FillReport,
+  type OpenPositionView,
+  type RiskOfficer,
+} from '../contracts.js';
+import {
+  candidateLiquidityUsd,
+  configVersion,
+  decideEntry,
+  decideExit,
+  effectiveCostModel,
+  entryIdempotencyKey,
+  estimateExitNetLamports,
+  liquidityUsdToLamports,
+  momentumParams,
+  screenCandidate,
+  sizeEntry,
+  type MomentumParams,
 } from './strategy.js';
-import { errorText, extraBuyOverheadOf, silentLogger, type AlertSink, type CostModelSelector, type Logger, type OrderRepository, type TraderAlert } from './types.js';
+import {
+  errorText,
+  extraBuyOverheadOf,
+  silentLogger,
+  type AlertSink,
+  type CostModelSelector,
+  type Logger,
+  type OrderRepository,
+  type TraderAlert,
+} from './types.js';
 
 export interface SellRetryOptions {
   /** Attempts per exit cycle before alerting and backing off. */
@@ -79,7 +116,7 @@ export type EntryTickResult =
   | { status: 'skipped_overlap' | 'disabled' }
   | { status: 'blocked'; reason: string }
   | { status: 'error'; error: string }
-  | { status: 'ran'; considered: number; entered: number; outcomes: Array<{ mint: string; outcome: string }> };
+  | { status: 'ran'; considered: number; entered: number; outcomes: { mint: string; outcome: string }[] };
 
 export type MonitorTickResult =
   | { status: 'skipped_overlap' }
@@ -87,9 +124,22 @@ export type MonitorTickResult =
   | { status: 'ran'; marked: number; exitsStarted: number };
 
 /** A sell that landed and still has to be booked with the Risk Officer. */
-interface PendingExit { exit: ExitReport; burnToBook: bigint; slippageBps: number; attempt: number; alerted: boolean }
+interface PendingExit {
+  exit: ExitReport;
+  burnToBook: bigint;
+  slippageBps: number;
+  attempt: number;
+  alerted: boolean;
+}
 
-const DEFAULT_SELL: SellRetryOptions = { maxAttempts: 4, baseDelayMs: 500, maxDelayMs: 8_000, slippageStepBps: 100, maxSlippageBps: 1_000, stuckRetryMs: 60_000 };
+const DEFAULT_SELL: SellRetryOptions = {
+  maxAttempts: 4,
+  baseDelayMs: 500,
+  maxDelayMs: 8_000,
+  slippageStepBps: 100,
+  maxSlippageBps: 1_000,
+  stuckRetryMs: 60_000,
+};
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -100,7 +150,10 @@ export class Trader implements EngineControl {
   private readonly clock: Clock;
   private readonly newId: () => string;
   private readonly sleep: (ms: number) => Promise<void>;
-  private readonly opts: Required<Omit<TraderOptions, 'paramOverrides' | 'sell'>> & { sell: SellRetryOptions; paramOverrides: Partial<MomentumParams> };
+  private readonly opts: Required<Omit<TraderOptions, 'paramOverrides' | 'sell'>> & {
+    sell: SellRetryOptions;
+    paramOverrides: Partial<MomentumParams>;
+  };
 
   private preset: Preset | null = null;
   private params: MomentumParams;
@@ -130,7 +183,10 @@ export class Trader implements EngineControl {
   /** Live sells with an unknown outcome: no new sell for the position until this time (also under the kill switch). */
   private readonly sellUnknownUntil = new Map<string, number>();
 
-  constructor(private readonly deps: TraderDeps, options: TraderOptions = {}) {
+  constructor(
+    private readonly deps: TraderDeps,
+    options: TraderOptions = {},
+  ) {
     if (deps.risk.mode() !== deps.broker.mode) {
       throw new Error(`mode mismatch: risk officer is ${deps.risk.mode()}, broker is ${deps.broker.mode}`);
     }
@@ -198,7 +254,11 @@ export class Trader implements EngineControl {
       open = await this.risk.openPositions();
     } catch (err) {
       this.log.error({ err: errorText(err) }, 'could not list open positions during kill switch');
-      await this.raise({ level: 'critical', code: 'kill_switch', message: 'kill switch could not list open positions' });
+      await this.raise({
+        level: 'critical',
+        code: 'kill_switch',
+        message: 'kill switch could not list open positions',
+      });
     }
     for (const p of open) this.launchExit(p, 'kill_switch', 'kill switch engaged');
     // Keep the monitor alive so any exit that fails is retried until it succeeds.
@@ -206,7 +266,11 @@ export class Trader implements EngineControl {
     this.scheduleMonitor();
     await this.setState('halted', 'kill switch');
     await this.auditEvent('kill_switch', null, { positionsClosing: open.length });
-    await this.raise({ level: 'critical', code: 'kill_switch', message: `kill switch engaged; closing ${open.length} positions` });
+    await this.raise({
+      level: 'critical',
+      code: 'kill_switch',
+      message: `kill switch engaged; closing ${open.length} positions`,
+    });
     return { positionsClosing: open.length };
   }
 
@@ -242,8 +306,20 @@ export class Trader implements EngineControl {
     }
   }
 
-  getState(): { state: EngineState; preset: PresetName | null; configVersion: string; exiting: number; killed: boolean } {
-    return { state: this.state, preset: this.preset?.name ?? null, configVersion: this.cfgVersion, exiting: this.exiting.size, killed: this.killed };
+  getState(): {
+    state: EngineState;
+    preset: PresetName | null;
+    configVersion: string;
+    exiting: number;
+    killed: boolean;
+  } {
+    return {
+      state: this.state,
+      preset: this.preset?.name ?? null,
+      configVersion: this.cfgVersion,
+      exiting: this.exiting.size,
+      killed: this.killed,
+    };
   }
 
   // ---------- loops ----------
@@ -272,10 +348,14 @@ export class Trader implements EngineControl {
   /** One entry pass. Never overlaps with itself: a call while a pass is running returns skipped_overlap. */
   runEntryTick(): Promise<EntryTickResult> {
     if (this.entryTick) return Promise.resolve({ status: 'skipped_overlap' });
-    const p = this.entryPass().catch((err): EntryTickResult => {
-      this.log.error({ err: errorText(err) }, 'entry tick failed');
-      return { status: 'error', error: errorText(err) };
-    }).finally(() => { this.entryTick = null; });
+    const p = this.entryPass()
+      .catch((err: unknown): EntryTickResult => {
+        this.log.error({ err: errorText(err) }, 'entry tick failed');
+        return { status: 'error', error: errorText(err) };
+      })
+      .finally(() => {
+        this.entryTick = null;
+      });
     this.entryTick = p;
     return p;
   }
@@ -283,10 +363,14 @@ export class Trader implements EngineControl {
   /** One monitor pass. Never overlaps with itself. Exits it starts run in the background (see drain()). */
   runMonitorTick(): Promise<MonitorTickResult> {
     if (this.monitorTick) return Promise.resolve({ status: 'skipped_overlap' });
-    const p = this.monitorPass().catch((err): MonitorTickResult => {
-      this.log.error({ err: errorText(err) }, 'monitor tick failed');
-      return { status: 'error', error: errorText(err) };
-    }).finally(() => { this.monitorTick = null; });
+    const p = this.monitorPass()
+      .catch((err: unknown): MonitorTickResult => {
+        this.log.error({ err: errorText(err) }, 'monitor tick failed');
+        return { status: 'error', error: errorText(err) };
+      })
+      .finally(() => {
+        this.monitorTick = null;
+      });
     this.monitorTick = p;
     return p;
   }
@@ -298,7 +382,10 @@ export class Trader implements EngineControl {
     const gate = await this.risk.canOpenNewPositions();
     if (!gate.ok) return { status: 'blocked', reason: gate.reason ?? 'risk officer blocked entries' };
     const now = this.clock.now();
-    const [open, candidates] = await Promise.all([this.risk.openPositions(), this.deps.candidates.topCandidates(this.opts.candidateLimit, now)]);
+    const [open, candidates] = await Promise.all([
+      this.risk.openPositions(),
+      this.deps.candidates.topCandidates(this.opts.candidateLimit, now),
+    ]);
     const held = new Set<string>(open.map((p) => p.mint));
     for (const m of this.inFlightMints) held.add(m);
     for (const e of this.exiting.values()) held.add(e.mint);
@@ -310,14 +397,21 @@ export class Trader implements EngineControl {
       else this.unresolvedMints.delete(m);
     }
     let slots = this.preset.limits.maxOpenPositions - open.length - this.inFlightMints.size - this.pendingFills.size;
-    const outcomes: Array<{ mint: string; outcome: string }> = [];
+    const outcomes: { mint: string; outcome: string }[] = [];
     let entered = 0;
     for (const c of candidates) {
       if (!this.entriesEnabled) break;
-      if (slots <= 0) { outcomes.push({ mint: c.mint, outcome: 'skip: max open positions' }); break; }
+      if (slots <= 0) {
+        outcomes.push({ mint: c.mint, outcome: 'skip: max open positions' });
+        break;
+      }
       const outcome = await this.tryEnter(c, held);
       outcomes.push({ mint: c.mint, outcome });
-      if (outcome.startsWith('entered')) { entered += 1; slots -= 1; held.add(c.mint); }
+      if (outcome.startsWith('entered')) {
+        entered += 1;
+        slots -= 1;
+        held.add(c.mint);
+      }
     }
     return { status: 'ran', considered: candidates.length, entered, outcomes };
   }
@@ -343,13 +437,20 @@ export class Trader implements EngineControl {
     const screen = screenCandidate(c, this.clock.now(), p);
     if (!screen.ok) return `skip: ${screen.reason}`;
     let key: string;
-    try { key = entryIdempotencyKey(p.name, c.mint, c.observedAt); } catch { return 'skip: bad observedAt'; }
+    try {
+      key = entryIdempotencyKey(p.name, c.mint, c.observedAt);
+    } catch {
+      return 'skip: bad observedAt';
+    }
     if (this.usedKeys.has(key)) return 'skip: observation already attempted';
 
     const solUsd = await this.deps.solUsd();
     if (solUsd === null || !(solUsd > 0)) return 'skip: SOL price unknown';
     const equity = await this.deps.equityLamports();
-    const sizing = { equityLamports: equity, liquidityLamports: liquidityUsdToLamports(candidateLiquidityUsd(c), solUsd) };
+    const sizing = {
+      equityLamports: equity,
+      liquidityLamports: liquidityUsdToLamports(candidateLiquidityUsd(c), solUsd),
+    };
     const size = sizeEntry(sizing, p);
     if (!size.ok) return `skip: ${size.reason}`;
     const txOverhead = txOverheadLamports(effectiveCostModel(this.deps.costModelFor(c.mint), p.tipLamports));
@@ -370,7 +471,15 @@ export class Trader implements EngineControl {
     this.inFlightMints.add(c.mint);
     held.add(c.mint);
     try {
-      return await this.reserveAndBuy(c, key, decision.lamports, decision.positionShareOfLiquidity, overhead, txOverhead, decision.reason);
+      return await this.reserveAndBuy(
+        c,
+        key,
+        decision.lamports,
+        decision.positionShareOfLiquidity,
+        overhead,
+        txOverhead,
+        decision.reason,
+      );
     } finally {
       this.inFlightMints.delete(c.mint);
     }
@@ -380,9 +489,24 @@ export class Trader implements EngineControl {
    * overhead: everything a buy may spend besides the swap input (tip, base fee, and for live brokers the
    * priority fee and token-account rent); txOverhead: the tip and base fee part, recorded as the order's fee.
    */
-  private async reserveAndBuy(c: Candidate, key: string, size: bigint, share: number, overhead: bigint, txOverhead: bigint, why: string): Promise<string> {
+  private async reserveAndBuy(
+    c: Candidate,
+    key: string,
+    size: bigint,
+    share: number,
+    overhead: bigint,
+    txOverhead: bigint,
+    why: string,
+  ): Promise<string> {
     const p = this.params;
-    const decision = await this.risk.reserve({ idempotencyKey: key, sleeve: p.name, mint: c.mint, lamports: size, candidate: c, positionShareOfLiquidity: share });
+    const decision = await this.risk.reserve({
+      idempotencyKey: key,
+      sleeve: p.name,
+      mint: c.mint,
+      lamports: size,
+      candidate: c,
+      positionShareOfLiquidity: share,
+    });
     if (!decision.approved) {
       this.log.info({ mint: c.mint, reason: decision.reason }, 'reservation vetoed');
       await this.auditEvent('entry_vetoed', c.mint, { reason: decision.reason, idempotencyKey: key });
@@ -397,21 +521,46 @@ export class Trader implements EngineControl {
         await this.risk.release(reservationId, reason, burned);
       } catch (err) {
         this.log.error({ reservationId, err: errorText(err) }, 'release failed');
-        await this.raise({ level: 'critical', code: 'record_failed', message: `release of reservation ${reservationId} failed`, mint: c.mint });
+        await this.raise({
+          level: 'critical',
+          code: 'record_failed',
+          message: `release of reservation ${reservationId} failed`,
+          mint: c.mint,
+        });
       }
     };
-    if (lamportsIn <= 0n) { await release('reservation too small for overhead', 0n); return 'released: reservation too small'; }
-    if (decision.expiresAt.getTime() <= this.clock.now().getTime()) { await release('reservation expired before submit', 0n); return 'released: reservation expired'; }
+    if (lamportsIn <= 0n) {
+      await release('reservation too small for overhead', 0n);
+      return 'released: reservation too small';
+    }
+    if (decision.expiresAt.getTime() <= this.clock.now().getTime()) {
+      await release('reservation expired before submit', 0n);
+      return 'released: reservation expired';
+    }
     const ticketProblem = this.checkTicket(decision.ticket, 'buy', c.mint, lamportsIn);
-    if (ticketProblem) { await release(ticketProblem, 0n); return `released: ${ticketProblem}`; }
+    if (ticketProblem) {
+      await release(ticketProblem, 0n);
+      return `released: ${ticketProblem}`;
+    }
     // The kill switch or a pause may have landed while the reservation was being approved.
-    if (!this.entriesEnabled) { await release('entries disabled before submit', 0n); return 'released: entries disabled before submit'; }
+    if (!this.entriesEnabled) {
+      await release('entries disabled before submit', 0n);
+      return 'released: entries disabled before submit';
+    }
 
     const orderId = this.newId();
     try {
       await this.deps.orders.create({
-        id: orderId, mode: this.broker.mode, side: 'buy', mint: c.mint, reservationId, positionId: null,
-        signalAt: new Date(c.observedAt), configVersion: this.cfgVersion, lamports: lamportsIn, tokenAmount: null,
+        id: orderId,
+        mode: this.broker.mode,
+        side: 'buy',
+        mint: c.mint,
+        reservationId,
+        positionId: null,
+        signalAt: new Date(c.observedAt),
+        configVersion: this.cfgVersion,
+        lamports: lamportsIn,
+        tokenAmount: null,
       });
       await this.deps.orders.markSubmitted(orderId, this.clock.now());
     } catch (err) {
@@ -420,52 +569,123 @@ export class Trader implements EngineControl {
       await release('order record failed', 0n);
       return 'released: order record failed';
     }
-    await this.auditEvent('buy_submitted', c.mint, { orderId, reservationId, lamportsIn: lamportsIn.toString(), reason: why, configVersion: this.cfgVersion });
+    await this.auditEvent('buy_submitted', c.mint, {
+      orderId,
+      reservationId,
+      lamportsIn: lamportsIn.toString(),
+      reason: why,
+      configVersion: this.cfgVersion,
+    });
     if (!this.entriesEnabled) {
-      await this.safeOrder(() => this.deps.orders.markFailed(orderId, { at: this.clock.now(), error: 'entries disabled before submit', feeLamports: 0n }));
+      await this.safeOrder(() =>
+        this.deps.orders.markFailed(orderId, {
+          at: this.clock.now(),
+          error: 'entries disabled before submit',
+          feeLamports: 0n,
+        }),
+      );
       await release('entries disabled before submit', 0n);
       return 'released: entries disabled before submit';
     }
 
     let res: Awaited<ReturnType<Broker['buy']>>;
     try {
-      res = await this.broker.buy({ mint: c.mint, lamportsIn, slippageBps: p.slippageBps, tipLamports: p.tipLamports, ticket: decision.ticket });
+      res = await this.broker.buy({
+        mint: c.mint,
+        lamportsIn,
+        slippageBps: p.slippageBps,
+        tipLamports: p.tipLamports,
+        ticket: decision.ticket,
+      });
     } catch (err) {
       const msg = `outcome unknown: ${errorText(err, 300)}`;
-      await this.safeOrder(() => this.deps.orders.markFailed(orderId, { at: this.clock.now(), error: msg, feeLamports: 0n }));
+      await this.safeOrder(() =>
+        this.deps.orders.markFailed(orderId, { at: this.clock.now(), error: msg, feeLamports: 0n }),
+      );
       if (this.broker.mode === 'paper') {
         await release(msg, 0n);
         return 'released: broker error';
       }
       // Live: the transaction may still land. Leave the reservation to expire and let reconciliation settle it.
       this.blockMint(c.mint);
-      await this.raise({ level: 'critical', code: 'buy_outcome_unknown', message: `buy outcome unknown for ${c.mint}; reservation ${reservationId} left held`, mint: c.mint });
+      await this.raise({
+        level: 'critical',
+        code: 'buy_outcome_unknown',
+        message: `buy outcome unknown for ${c.mint}; reservation ${reservationId} left held`,
+        mint: c.mint,
+      });
       return 'unknown: broker error';
     }
 
     if (!res.ok) {
-      await this.safeOrder(() => this.deps.orders.markFailed(orderId, { at: this.clock.now(), error: res.error, feeLamports: res.burnedFeeLamports }));
+      await this.safeOrder(() =>
+        this.deps.orders.markFailed(orderId, {
+          at: this.clock.now(),
+          error: res.error,
+          feeLamports: res.burnedFeeLamports,
+        }),
+      );
       await release(`buy failed: ${res.error}`, res.burnedFeeLamports);
-      await this.auditEvent('buy_failed', c.mint, { orderId, reservationId, error: res.error, burnedFeeLamports: res.burnedFeeLamports.toString() });
+      await this.auditEvent('buy_failed', c.mint, {
+        orderId,
+        reservationId,
+        error: res.error,
+        burnedFeeLamports: res.burnedFeeLamports.toString(),
+      });
       return `released: buy failed: ${res.error}`;
     }
 
-    await this.safeOrder(() => this.deps.orders.markLanded(orderId, { at: this.clock.now(), signature: res.signature, lamports: res.lamportsSpent, tokenAmount: res.tokenAmount, feeLamports: txOverhead }));
+    await this.safeOrder(() =>
+      this.deps.orders.markLanded(orderId, {
+        at: this.clock.now(),
+        signature: res.signature,
+        lamports: res.lamportsSpent,
+        tokenAmount: res.tokenAmount,
+        feeLamports: txOverhead,
+      }),
+    );
     if (res.lamportsSpent > cap) {
-      await this.auditEvent('spend_above_reservation', c.mint, { orderId, reservationId, lamportsSpent: res.lamportsSpent.toString(), reservedLamports: cap.toString() });
-      await this.raise({ level: 'critical', code: 'spend_above_reservation', message: `buy of ${c.mint} spent ${res.lamportsSpent} lamports, above the ${cap} reserved`, mint: c.mint });
+      await this.auditEvent('spend_above_reservation', c.mint, {
+        orderId,
+        reservationId,
+        lamportsSpent: res.lamportsSpent.toString(),
+        reservedLamports: cap.toString(),
+      });
+      await this.raise({
+        level: 'critical',
+        code: 'spend_above_reservation',
+        message: `buy of ${c.mint} spent ${res.lamportsSpent} lamports, above the ${cap} reserved`,
+        mint: c.mint,
+      });
     }
     if (res.tokenAmount <= 0n) {
       // SOL left the wallet but no tokens arrived: book the spend as a loss rather than open an unsellable position.
       this.blockMint(c.mint);
-      await this.auditEvent('buy_no_tokens', c.mint, { orderId, reservationId, lamportsSpent: res.lamportsSpent.toString(), signature: res.signature });
-      await this.raise({ level: 'critical', code: 'buy_no_tokens', message: `buy of ${c.mint} landed without tokens; ${res.lamportsSpent} lamports booked as lost`, mint: c.mint });
+      await this.auditEvent('buy_no_tokens', c.mint, {
+        orderId,
+        reservationId,
+        lamportsSpent: res.lamportsSpent.toString(),
+        signature: res.signature,
+      });
+      await this.raise({
+        level: 'critical',
+        code: 'buy_no_tokens',
+        message: `buy of ${c.mint} landed without tokens; ${res.lamportsSpent} lamports booked as lost`,
+        mint: c.mint,
+      });
       await release('buy landed without tokens', res.lamportsSpent < cap ? res.lamportsSpent : cap);
       return 'released: buy landed without tokens';
     }
     const fill: FillReport = {
-      reservationId, orderId, mint: c.mint, symbol: c.symbol, strategy: p.name,
-      lamportsSpent: res.lamportsSpent, tokenAmount: res.tokenAmount, entryPriceUsd: c.priceUsd, signature: res.signature,
+      reservationId,
+      orderId,
+      mint: c.mint,
+      symbol: c.symbol,
+      strategy: p.name,
+      lamportsSpent: res.lamportsSpent,
+      tokenAmount: res.tokenAmount,
+      entryPriceUsd: c.priceUsd,
+      signature: res.signature,
     };
     const positionId = await this.bookFill(fill);
     if (positionId !== null) return `entered: ${positionId}`;
@@ -479,10 +699,21 @@ export class Trader implements EngineControl {
     try {
       const { positionId } = await this.risk.recordFill(fill);
       await this.safeOrder(() => this.deps.orders.attachPosition(fill.orderId, positionId));
-      await this.auditEvent('buy_filled', fill.mint, { orderId: fill.orderId, positionId, lamportsSpent: fill.lamportsSpent.toString(), tokenAmount: fill.tokenAmount.toString(), signature: fill.signature });
+      await this.auditEvent('buy_filled', fill.mint, {
+        orderId: fill.orderId,
+        positionId,
+        lamportsSpent: fill.lamportsSpent.toString(),
+        tokenAmount: fill.tokenAmount.toString(),
+        signature: fill.signature,
+      });
       return positionId;
     } catch (err) {
-      await this.raise({ level: 'critical', code: 'record_failed', message: `buy landed but recordFill failed for ${fill.mint}: ${errorText(err, 200)}`, mint: fill.mint });
+      await this.raise({
+        level: 'critical',
+        code: 'record_failed',
+        message: `buy landed but recordFill failed for ${fill.mint}: ${errorText(err, 200)}`,
+        mint: fill.mint,
+      });
       return null;
     }
   }
@@ -513,7 +744,14 @@ export class Trader implements EngineControl {
         const { positionId } = await this.risk.recordFill(fill);
         this.pendingFills.delete(reservationId);
         await this.safeOrder(() => this.deps.orders.attachPosition(fill.orderId, positionId));
-        await this.auditEvent('buy_filled', fill.mint, { orderId: fill.orderId, positionId, lamportsSpent: fill.lamportsSpent.toString(), tokenAmount: fill.tokenAmount.toString(), signature: fill.signature, late: true });
+        await this.auditEvent('buy_filled', fill.mint, {
+          orderId: fill.orderId,
+          positionId,
+          lamportsSpent: fill.lamportsSpent.toString(),
+          tokenAmount: fill.tokenAmount.toString(),
+          signature: fill.signature,
+          late: true,
+        });
       } catch (err) {
         this.log.warn({ reservationId, err: errorText(err, 200) }, 'recordFill retry failed');
       }
@@ -521,12 +759,18 @@ export class Trader implements EngineControl {
   }
 
   /** Live mode requires a ticket that matches the intended transaction. Returns a problem description or null. */
-  private checkTicket(t: SignedTicket | null, intent: 'buy' | 'sell', mint: string, lamportsIn: bigint | null): string | null {
+  private checkTicket(
+    t: SignedTicket | null,
+    intent: 'buy' | 'sell',
+    mint: string,
+    lamportsIn: bigint | null,
+  ): string | null {
     if (this.broker.mode !== 'live') return null;
     if (!t) return 'live mode without ticket';
     if (t.ticket.intent !== intent) return `ticket intent ${t.ticket.intent} != ${intent}`;
     if (t.ticket.mint !== mint) return 'ticket mint mismatch';
-    if (!/^\d+$/.test(t.ticket.maxLamports) || !/^\d+$/.test(t.ticket.maxTipLamports)) return 'ticket amounts malformed';
+    if (!/^\d+$/.test(t.ticket.maxLamports) || !/^\d+$/.test(t.ticket.maxTipLamports))
+      return 'ticket amounts malformed';
     if (lamportsIn !== null && BigInt(t.ticket.maxLamports) < lamportsIn) return 'ticket amount below order';
     if (BigInt(t.ticket.maxTipLamports) < this.params.tipLamports) return 'ticket tip allowance below strategy tip';
     if (t.ticket.expiresAt <= this.clock.now().getTime()) return 'ticket expired';
@@ -541,16 +785,23 @@ export class Trader implements EngineControl {
     const now = this.clock.now();
     // Per-position state for positions that are no longer open (closed elsewhere, written off) is dropped.
     const openIds = new Set(open.map((p) => p.id));
-    for (const m of [this.stuckUntil, this.unquotable, this.sellUnknownUntil, this.pendingExits] as Array<Map<string, unknown>>) {
+    for (const m of [this.stuckUntil, this.unquotable, this.sellUnknownUntil, this.pendingExits] as Map<
+      string,
+      unknown
+    >[]) {
       for (const id of m.keys()) if (!openIds.has(id) && !this.exiting.has(id)) m.delete(id);
     }
-    const marks: Array<{ positionId: string; markLamports: bigint }> = [];
-    const toExit: Array<{ pos: OpenPositionView; reason: ExitReport['reason']; detail: string }> = [];
+    const marks: { positionId: string; markLamports: bigint }[] = [];
+    const toExit: { pos: OpenPositionView; reason: ExitReport['reason']; detail: string }[] = [];
     for (const pos of open) {
       if (this.exiting.has(pos.id)) continue;
       if (this.pendingExits.has(pos.id)) {
         // Already sold; only the booking is outstanding.
-        toExit.push({ pos, reason: this.pendingExits.get(pos.id)!.exit.reason, detail: 'retry booking of a landed sell' });
+        toExit.push({
+          pos,
+          reason: this.pendingExits.get(pos.id)!.exit.reason,
+          detail: 'retry booking of a landed sell',
+        });
         continue;
       }
       const net = await this.markOne(pos);
@@ -559,10 +810,21 @@ export class Trader implements EngineControl {
       if (pos.status === 'closing') {
         const unknown = this.sellUnknownUntil.get(pos.id);
         if (unknown !== undefined && unknown > now.getTime()) continue;
-        toExit.push({ pos, reason: this.killed ? 'kill_switch' : 'manual', detail: 'position marked closing by the risk officer' });
+        toExit.push({
+          pos,
+          reason: this.killed ? 'kill_switch' : 'manual',
+          detail: 'position marked closing by the risk officer',
+        });
         continue;
       }
-      const d = decideExit({ entryLamports: pos.entryLamports, openedAt: pos.openedAt, netExitLamports: net, now, params: this.params, killSwitch: this.killed });
+      const d = decideExit({
+        entryLamports: pos.entryLamports,
+        openedAt: pos.openedAt,
+        netExitLamports: net,
+        now,
+        params: this.params,
+        killSwitch: this.killed,
+      });
       if (!d.exit) continue;
       const stuck = this.stuckUntil.get(pos.id);
       if (!this.killed && stuck !== undefined && stuck > now.getTime()) continue;
@@ -586,7 +848,11 @@ export class Trader implements EngineControl {
       const q = await this.broker.quote(pos.mint, 'sell', pos.tokenAmount);
       if (q.routeOk && q.priceLamportsPerUnit >= 0 && Number.isFinite(q.priceLamportsPerUnit)) {
         this.unquotable.delete(pos.id);
-        return estimateExitNetLamports(pos.tokenAmount, q.priceLamportsPerUnit, effectiveCostModel(this.deps.costModelFor(pos.mint), this.params.tipLamports));
+        return estimateExitNetLamports(
+          pos.tokenAmount,
+          q.priceLamportsPerUnit,
+          effectiveCostModel(this.deps.costModelFor(pos.mint), this.params.tipLamports),
+        );
       }
     } catch (err) {
       this.log.warn({ mint: pos.mint, err: errorText(err, 200) }, 'sell quote failed');
@@ -594,7 +860,13 @@ export class Trader implements EngineControl {
     const n = (this.unquotable.get(pos.id) ?? 0) + 1;
     this.unquotable.set(pos.id, n);
     if (n === this.opts.unquotableAlertAfter) {
-      await this.raise({ level: 'warning', code: 'position_unquotable', message: `no sell quote for ${pos.symbol} after ${n} tries`, mint: pos.mint, positionId: pos.id });
+      await this.raise({
+        level: 'warning',
+        code: 'position_unquotable',
+        message: `no sell quote for ${pos.symbol} after ${n} tries`,
+        mint: pos.mint,
+        positionId: pos.id,
+      });
     }
     return null;
   }
@@ -602,11 +874,19 @@ export class Trader implements EngineControl {
   private launchExit(pos: OpenPositionView, reason: ExitReport['reason'], detail: string): void {
     if (this.exiting.has(pos.id)) return;
     const done = this.exitPosition(pos, reason, detail)
-      .catch(async (err) => {
+      .catch(async (err: unknown) => {
         this.log.error({ positionId: pos.id, err: errorText(err) }, 'exit crashed');
-        await this.raise({ level: 'critical', code: 'exit_failed', message: `exit of ${pos.symbol} crashed: ${errorText(err, 200)}`, positionId: pos.id, mint: pos.mint });
+        await this.raise({
+          level: 'critical',
+          code: 'exit_failed',
+          message: `exit of ${pos.symbol} crashed: ${errorText(err, 200)}`,
+          positionId: pos.id,
+          mint: pos.mint,
+        });
       })
-      .finally(() => { this.exiting.delete(pos.id); });
+      .finally(() => {
+        this.exiting.delete(pos.id);
+      });
     this.exiting.set(pos.id, { mint: pos.mint, done });
   }
 
@@ -637,12 +917,26 @@ export class Trader implements EngineControl {
         continue;
       }
       const problem = this.checkTicket(ticket, 'sell', pos.mint, null);
-      if (problem) { this.log.warn({ positionId: pos.id, problem }, 'exit ticket rejected'); continue; }
+      if (problem) {
+        this.log.warn({ positionId: pos.id, problem }, 'exit ticket rejected');
+        continue;
+      }
 
       const orderId = this.newId();
       let recorded = true;
       try {
-        await this.deps.orders.create({ id: orderId, mode: this.broker.mode, side: 'sell', mint: pos.mint, reservationId: null, positionId: pos.id, signalAt: null, configVersion: this.cfgVersion, lamports: null, tokenAmount: pos.tokenAmount });
+        await this.deps.orders.create({
+          id: orderId,
+          mode: this.broker.mode,
+          side: 'sell',
+          mint: pos.mint,
+          reservationId: null,
+          positionId: pos.id,
+          signalAt: null,
+          configVersion: this.cfgVersion,
+          lamports: null,
+          tokenAmount: pos.tokenAmount,
+        });
         await this.deps.orders.markSubmitted(orderId, this.clock.now());
       } catch (err) {
         // Exits are never blocked by bookkeeping problems.
@@ -652,16 +946,31 @@ export class Trader implements EngineControl {
 
       let res: Awaited<ReturnType<Broker['sell']>>;
       try {
-        res = await this.broker.sell({ mint: pos.mint, tokenAmount: pos.tokenAmount, slippageBps, tipLamports: p.tipLamports, ticket });
+        res = await this.broker.sell({
+          mint: pos.mint,
+          tokenAmount: pos.tokenAmount,
+          slippageBps,
+          tipLamports: p.tipLamports,
+          ticket,
+        });
       } catch (err) {
         const error = `outcome unknown: ${errorText(err, 300)}`;
-        if (recorded) await this.safeOrder(() => this.deps.orders.markFailed(orderId, { at: this.clock.now(), error, feeLamports: 0n }));
+        if (recorded)
+          await this.safeOrder(() =>
+            this.deps.orders.markFailed(orderId, { at: this.clock.now(), error, feeLamports: 0n }),
+          );
         if (this.broker.mode === 'live') {
           // The sell may still land. Selling again right away would at best burn fees on an empty token account,
           // so hold this position (kill switch included) and let reconciliation settle the balance.
           this.sellUnknownUntil.set(pos.id, this.clock.now().getTime() + s.stuckRetryMs);
           await this.auditEvent('sell_outcome_unknown', pos.id, { orderId, mint: pos.mint, reason, error });
-          await this.raise({ level: 'critical', code: 'sell_outcome_unknown', message: `sell outcome unknown for ${pos.symbol}; holding further sells for ${Math.round(s.stuckRetryMs / 1000)}s, reconcile the wallet`, positionId: pos.id, mint: pos.mint });
+          await this.raise({
+            level: 'critical',
+            code: 'sell_outcome_unknown',
+            message: `sell outcome unknown for ${pos.symbol}; holding further sells for ${Math.round(s.stuckRetryMs / 1000)}s, reconcile the wallet`,
+            positionId: pos.id,
+            mint: pos.mint,
+          });
           return;
         }
         this.log.warn({ positionId: pos.id, attempt, error }, 'paper sell threw');
@@ -669,7 +978,16 @@ export class Trader implements EngineControl {
       }
 
       if (res.ok) {
-        if (recorded) await this.safeOrder(() => this.deps.orders.markLanded(orderId, { at: this.clock.now(), signature: res.signature, lamports: res.lamportsReceived, tokenAmount: pos.tokenAmount, feeLamports: overhead }));
+        if (recorded)
+          await this.safeOrder(() =>
+            this.deps.orders.markLanded(orderId, {
+              at: this.clock.now(),
+              signature: res.signature,
+              lamports: res.lamportsReceived,
+              tokenAmount: pos.tokenAmount,
+              feeLamports: overhead,
+            }),
+          );
         this.stuckUntil.delete(pos.id);
         this.unquotable.delete(pos.id);
         this.sellUnknownUntil.delete(pos.id);
@@ -677,14 +995,23 @@ export class Trader implements EngineControl {
         // ledger moves by exactly what the wallet did and the exit record stays non-negative.
         const received = res.lamportsReceived;
         const state: PendingExit = {
-          exit: { positionId: pos.id, orderId, lamportsReceived: received > 0n ? received : 0n, reason, signature: res.signature },
+          exit: {
+            positionId: pos.id,
+            orderId,
+            lamportsReceived: received > 0n ? received : 0n,
+            reason,
+            signature: res.signature,
+          },
           burnToBook: received < 0n ? -received : 0n,
           slippageBps,
           attempt,
           alerted: false,
         };
         if (reason === 'stop_loss' && this.preset) {
-          this.stopCooldown.set(pos.mint, this.clock.now().getTime() + this.preset.filters.cooldownAfterStopSeconds * 1000);
+          this.stopCooldown.set(
+            pos.mint,
+            this.clock.now().getTime() + this.preset.filters.cooldownAfterStopSeconds * 1000,
+          );
         }
         this.addPending(this.pendingExits, pos.id, state);
         await this.settleExit(pos, state, burnedTotal);
@@ -695,14 +1022,38 @@ export class Trader implements EngineControl {
       try {
         await this.risk.recordExitFailure(pos.id, res.burnedFeeLamports, res.error);
       } catch (err) {
-        await this.raise({ level: 'critical', code: 'record_failed', message: `recordExitFailure failed for ${pos.symbol}: ${errorText(err, 200)}`, positionId: pos.id, mint: pos.mint });
+        await this.raise({
+          level: 'critical',
+          code: 'record_failed',
+          message: `recordExitFailure failed for ${pos.symbol}: ${errorText(err, 200)}`,
+          positionId: pos.id,
+          mint: pos.mint,
+        });
       }
-      if (recorded) await this.safeOrder(() => this.deps.orders.markFailed(orderId, { at: this.clock.now(), error: res.error, feeLamports: res.burnedFeeLamports }));
+      if (recorded)
+        await this.safeOrder(() =>
+          this.deps.orders.markFailed(orderId, {
+            at: this.clock.now(),
+            error: res.error,
+            feeLamports: res.burnedFeeLamports,
+          }),
+        );
       this.log.warn({ positionId: pos.id, attempt, slippageBps, error: res.error }, 'sell attempt failed');
     }
     this.stuckUntil.set(pos.id, this.clock.now().getTime() + s.stuckRetryMs);
-    await this.auditEvent('exit_failed', pos.id, { mint: pos.mint, reason, attempts: s.maxAttempts, burnedFeeLamports: burnedTotal.toString() });
-    await this.raise({ level: 'critical', code: 'exit_failed', message: `could not exit ${pos.symbol} after ${s.maxAttempts} attempts (${reason}); will retry`, positionId: pos.id, mint: pos.mint });
+    await this.auditEvent('exit_failed', pos.id, {
+      mint: pos.mint,
+      reason,
+      attempts: s.maxAttempts,
+      burnedFeeLamports: burnedTotal.toString(),
+    });
+    await this.raise({
+      level: 'critical',
+      code: 'exit_failed',
+      message: `could not exit ${pos.symbol} after ${s.maxAttempts} attempts (${reason}); will retry`,
+      positionId: pos.id,
+      mint: pos.mint,
+    });
   }
 
   /**
@@ -718,32 +1069,54 @@ export class Trader implements EngineControl {
       const { realizedPnlLamports } = await this.risk.recordExit(state.exit);
       this.pendingExits.delete(pos.id);
       await this.auditEvent('sell_filled', pos.id, {
-        orderId: state.exit.orderId, reason: state.exit.reason, lamportsReceived: state.exit.lamportsReceived.toString(), burnedOnRetries: burnedOnRetries.toString(),
-        realizedPnlLamports: realizedPnlLamports.toString(), attempt: state.attempt, slippageBps: state.slippageBps,
+        orderId: state.exit.orderId,
+        reason: state.exit.reason,
+        lamportsReceived: state.exit.lamportsReceived.toString(),
+        burnedOnRetries: burnedOnRetries.toString(),
+        realizedPnlLamports: realizedPnlLamports.toString(),
+        attempt: state.attempt,
+        slippageBps: state.slippageBps,
       });
     } catch (err) {
-      if (state.alerted) { this.log.warn({ positionId: pos.id, err: errorText(err, 200) }, 'exit booking retry failed'); return; }
+      if (state.alerted) {
+        this.log.warn({ positionId: pos.id, err: errorText(err, 200) }, 'exit booking retry failed');
+        return;
+      }
       state.alerted = true;
-      await this.raise({ level: 'critical', code: 'record_failed', message: `sell landed but booking failed for ${pos.symbol}: ${errorText(err, 200)}; will retry booking, not the sale`, positionId: pos.id, mint: pos.mint });
+      await this.raise({
+        level: 'critical',
+        code: 'record_failed',
+        message: `sell landed but booking failed for ${pos.symbol}: ${errorText(err, 200)}; will retry booking, not the sale`,
+        positionId: pos.id,
+        mint: pos.mint,
+      });
     }
   }
 
   // ---------- helpers ----------
 
   private async safeOrder(fn: () => Promise<void>): Promise<void> {
-    try { await fn(); } catch (err) { this.log.error({ err: errorText(err) }, 'order record update failed'); }
+    try {
+      await fn();
+    } catch (err) {
+      this.log.error({ err: errorText(err) }, 'order record update failed');
+    }
   }
 
   private async setState(state: EngineState, reason: string): Promise<void> {
     this.state = state;
-    try { await this.deps.onStateChange?.(state, { preset: this.preset?.name ?? null, reason }); } catch (err) {
+    try {
+      await this.deps.onStateChange?.(state, { preset: this.preset?.name ?? null, reason });
+    } catch (err) {
       this.log.error({ err: errorText(err) }, 'onStateChange callback failed');
     }
   }
 
   private async auditEvent(type: string, ref: string | null, payload: Record<string, unknown>): Promise<void> {
     if (!this.deps.audit) return;
-    try { await this.deps.audit.append({ actor: 'trader', type, ref, payload }); } catch (err) {
+    try {
+      await this.deps.audit.append({ actor: 'trader', type, ref, payload });
+    } catch (err) {
       this.log.error({ type, err: errorText(err) }, 'audit append failed');
     }
   }
@@ -751,7 +1124,11 @@ export class Trader implements EngineControl {
   private async raise(a: TraderAlert): Promise<void> {
     const fn = a.level === 'critical' ? this.log.error.bind(this.log) : this.log.warn.bind(this.log);
     fn({ alert: a.code, mint: a.mint, positionId: a.positionId }, a.message);
-    try { await this.deps.alert?.(a); } catch (err) { this.log.error({ err: errorText(err) }, 'alert sink failed'); }
+    try {
+      await this.deps.alert?.(a);
+    } catch (err) {
+      this.log.error({ err: errorText(err) }, 'alert sink failed');
+    }
   }
 }
 

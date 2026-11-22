@@ -17,15 +17,23 @@ import { looksSynthetic, type BacktestInput, type PricePoint, type SignalEvent, 
 
 export class SimClock implements Clock {
   private t: number;
-  constructor(start: Date | number) { this.t = typeof start === 'number' ? start : start.getTime(); }
-  now(): Date { return new Date(this.t); }
+  constructor(start: Date | number) {
+    this.t = typeof start === 'number' ? start : start.getTime();
+  }
+  now(): Date {
+    return new Date(this.t);
+  }
   set(ms: number): void {
     if (ms < this.t) throw new Error('simulated clock cannot go backwards');
     this.t = ms;
   }
 }
 
-interface MarketState { price: number; liquidityUsd: number; venue: Venue | undefined }
+interface MarketState {
+  price: number;
+  liquidityUsd: number;
+  venue: Venue | undefined;
+}
 
 /**
  * Quotes from the replayed price series. Price impact follows a constant-product approximation:
@@ -39,16 +47,24 @@ export class ReplayQuoteSource implements QuoteSource {
     this.state.set(p.mint, { price: p.priceLamportsPerUnit, liquidityUsd: p.liquidityUsd, venue: p.venue });
   }
 
-  lastPrice(mint: string): number | null { return this.state.get(mint)?.price ?? null; }
+  lastPrice(mint: string): number | null {
+    return this.state.get(mint)?.price ?? null;
+  }
 
   async quote(mint: string, side: 'buy' | 'sell', amount: bigint): Promise<QuoteResult> {
     const s = this.state.get(mint);
-    if (!s || amount <= 0n || s.liquidityUsd <= 0) return { priceLamportsPerUnit: 0, priceImpactPct: 0, routeOk: false };
+    if (!s || amount <= 0n || s.liquidityUsd <= 0)
+      return { priceLamportsPerUnit: 0, priceImpactPct: 0, routeOk: false };
     const liqLamports = (s.liquidityUsd / this.solUsd()) * 1e9;
     const sizeLamports = side === 'buy' ? Number(amount) : Number(amount) * s.price;
     const impact = Math.min(0.95, (2 * sizeLamports) / liqLamports);
     const px = side === 'buy' ? s.price * (1 + impact) : s.price * (1 - impact);
-    const r: QuoteResult = { priceLamportsPerUnit: px, priceImpactPct: impact * 100, routeOk: true, midPriceLamportsPerUnit: s.price };
+    const r: QuoteResult = {
+      priceLamportsPerUnit: px,
+      priceImpactPct: impact * 100,
+      routeOk: true,
+      midPriceLamportsPerUnit: s.price,
+    };
     if (s.venue) r.venue = s.venue;
     return r;
   }
@@ -56,7 +72,9 @@ export class ReplayQuoteSource implements QuoteSource {
 
 export class ReplayCandidateSource implements CandidateSource {
   private readonly latest = new Map<string, Candidate>();
-  set(c: Candidate): void { this.latest.set(c.mint, c); }
+  set(c: Candidate): void {
+    this.latest.set(c.mint, c);
+  }
   async topCandidates(limit: number, now: Date): Promise<Candidate[]> {
     const t = now.getTime();
     return [...this.latest.values()]
@@ -98,7 +116,10 @@ export const defaultScorer: Scorer = (ctx) => {
   const change5m = (last.priceLamportsPerUnit / ref.priceLamportsPerUnit - 1) * 100;
   const recent = signals.filter((s) => Date.parse(s.observedAt) >= t - 10 * 60_000);
   const velocity = recent.length / 10;
-  const score = Math.max(0, Math.min(100, 50 + 1.5 * Math.max(-20, Math.min(20, change5m)) + 4 * Math.min(velocity, 5)));
+  const score = Math.max(
+    0,
+    Math.min(100, 50 + 1.5 * Math.max(-20, Math.min(20, change5m)) + 4 * Math.min(velocity, 5)),
+  );
   const latest = signals[signals.length - 1];
   const payload = latest?.payload ?? {};
   const symbol = typeof payload.symbol === 'string' ? payload.symbol.slice(0, 16) : ctx.mint.slice(0, 4);
@@ -108,14 +129,28 @@ export const defaultScorer: Scorer = (ctx) => {
     pairAddress: ctx.mint,
     score,
     features: {
-      liquidityUsd: last.liquidityUsd, volume5mUsd: num(payload.volume5mUsd) ?? 0, volumeTrend: 1, priceChange5mPct: change5m,
-      holderCount: num(payload.holderCount) ?? 0, holderGrowth15m: 1, mentionVelocity: velocity, sentiment: 0,
-      narrativeLabel: null, narrativeScore: null, boosted: false,
+      liquidityUsd: last.liquidityUsd,
+      volume5mUsd: num(payload.volume5mUsd) ?? 0,
+      volumeTrend: 1,
+      priceChange5mPct: change5m,
+      holderCount: num(payload.holderCount) ?? 0,
+      holderGrowth15m: 1,
+      mentionVelocity: velocity,
+      sentiment: 0,
+      narrativeLabel: null,
+      narrativeScore: null,
+      boosted: false,
     },
     safety: {
-      mint: ctx.mint, mintAuthorityRevoked: true, freezeAuthorityRevoked: true, token2022Extensions: [],
-      liquidityUsd: last.liquidityUsd, top10HolderShare: num(payload.top10HolderShare) ?? 0.2, creatorFlagged: false,
-      ageSeconds: num(payload.ageSeconds) ?? 86_400, sellSimulationRatio: num(payload.sellSimulationRatio) ?? 0.97,
+      mint: ctx.mint,
+      mintAuthorityRevoked: true,
+      freezeAuthorityRevoked: true,
+      token2022Extensions: [],
+      liquidityUsd: last.liquidityUsd,
+      top10HolderShare: num(payload.top10HolderShare) ?? 0.2,
+      creatorFlagged: false,
+      ageSeconds: num(payload.ageSeconds) ?? 86_400,
+      sellSimulationRatio: num(payload.sellSimulationRatio) ?? 0.97,
     },
     reasons: [`change5m ${change5m.toFixed(2)}%`, `mentions/min ${velocity.toFixed(2)}`],
     observedAt: latest ? new Date(Date.parse(latest.observedAt)).toISOString() : now.toISOString(),
@@ -143,7 +178,12 @@ export interface BacktestOptions {
   haltOnDrawdown?: boolean;
 }
 
-type Ev = { at: number; order: number; idx: number; kind: 'price' | 'signal' };
+interface Ev {
+  at: number;
+  order: number;
+  idx: number;
+  kind: 'price' | 'signal';
+}
 
 function solSeries(points: SolPricePoint[] | undefined) {
   const sorted = (points ?? []).map((p) => ({ at: Date.parse(p.at), solUsd: p.solUsd })).sort((a, b) => a.at - b.at);
@@ -155,7 +195,9 @@ function solSeries(points: SolPricePoint[] | undefined) {
       while (i + 1 < sorted.length && sorted[i + 1]!.at <= t) i += 1;
       return i >= 0 ? sorted[i]!.solUsd : null;
     },
-    firstUsed(from: number): number | null { return sorted.find((p) => p.at >= from)?.solUsd ?? sorted[0]?.solUsd ?? null; },
+    firstUsed(from: number): number | null {
+      return sorted.find((p) => p.at >= from)?.solUsd ?? sorted[0]?.solUsd ?? null;
+    },
   };
 }
 
@@ -169,7 +211,9 @@ export async function runBacktest(input: BacktestInput, opts: BacktestOptions): 
 
   const events: Ev[] = [];
   input.prices.forEach((p, idx) => events.push({ at: Date.parse(p.at), order: 0, idx, kind: 'price' }));
-  input.signals.forEach((s, idx) => { if (s.mint) events.push({ at: Date.parse(s.observedAt), order: 1, idx, kind: 'signal' }); });
+  input.signals.forEach((s, idx) => {
+    if (s.mint) events.push({ at: Date.parse(s.observedAt), order: 1, idx, kind: 'signal' });
+  });
   events.sort((a, b) => a.at - b.at || a.order - b.order || a.idx - b.idx);
   const firstAt = events[0]?.at ?? 0;
   const lastAt = events[events.length - 1]?.at ?? 0;
@@ -178,14 +222,23 @@ export async function runBacktest(input: BacktestInput, opts: BacktestOptions): 
   const sol = solSeries(input.solPrices);
   let solNow: number | null = sol.has ? null : defaultSol;
   const quotes = new ReplayQuoteSource(() => solNow ?? defaultSol);
-  const broker = new PaperBroker({ quotes, costModels: opts.costModels ?? COST_MODELS, seed: opts.seed ?? 1, ...(opts.failureRate !== undefined ? { failureRate: opts.failureRate } : {}) });
+  const broker = new PaperBroker({
+    quotes,
+    costModels: opts.costModels ?? COST_MODELS,
+    seed: opts.seed ?? 1,
+    ...(opts.failureRate !== undefined ? { failureRate: opts.failureRate } : {}),
+  });
   const risk = new MemoryRiskOfficer({ preset, startingLamports, clock, haltOnDrawdown: opts.haltOnDrawdown ?? true });
   const candidates = new ReplayCandidateSource();
   const orders = new InMemoryOrderRepository();
   let idSeq = 0;
   const trader = new Trader(
     {
-      risk, broker, candidates, orders, clock,
+      risk,
+      broker,
+      candidates,
+      orders,
+      clock,
       equityLamports: async () => risk.equity(),
       solUsd: () => solNow,
       costModelFor: (m) => broker.costModelFor(m),
@@ -200,12 +253,17 @@ export async function runBacktest(input: BacktestInput, opts: BacktestOptions): 
   const hist = new Map<string, { signals: SignalEvent[]; prices: PricePoint[] }>();
   const histFor = (mint: string) => {
     let h = hist.get(mint);
-    if (!h) { h = { signals: [], prices: [] }; hist.set(mint, h); }
+    if (!h) {
+      h = { signals: [], prices: [] };
+      hist.set(mint, h);
+    }
     return h;
   };
-  const trim = <T>(arr: T[], timeOf: (x: T) => number, t: number) => { while (arr.length > 0 && timeOf(arr[0]!) < t - lookback) arr.shift(); };
+  const trim = <T>(arr: T[], timeOf: (x: T) => number, t: number) => {
+    while (arr.length > 0 && timeOf(arr[0]!) < t - lookback) arr.shift();
+  };
 
-  const equity: Array<{ at: number; lamports: bigint }> = [{ at: firstAt, lamports: risk.equity() }];
+  const equity: { at: number; lamports: bigint }[] = [{ at: firstAt, lamports: risk.equity() }];
   const entryStats = { ticks: 0, entered: 0, vetoed: 0, buyFailed: 0, skipped: 0 };
 
   const timeStopMs = params.timeStopSeconds * 1000;
@@ -242,8 +300,18 @@ export async function runBacktest(input: BacktestInput, opts: BacktestOptions): 
       const h = histFor(s.mint!);
       h.signals.push(s);
       trim(h.signals, (x) => Date.parse(x.observedAt), ev.at);
-      const c = scorer({ mint: s.mint!, now: clock.now(), signals: h.signals, prices: h.prices, preset, solUsd: solNow ?? defaultSol });
-      if (c && c.mint === s.mint) { candidates.set(c); scored = true; }
+      const c = scorer({
+        mint: s.mint!,
+        now: clock.now(),
+        signals: h.signals,
+        prices: h.prices,
+        preset,
+        solUsd: solNow ?? defaultSol,
+      });
+      if (c && c.mint === s.mint) {
+        candidates.set(c);
+        scored = true;
+      }
     }
     await trader.runMonitorTick();
     await trader.drain();
@@ -275,9 +343,24 @@ export async function runBacktest(input: BacktestInput, opts: BacktestOptions): 
 
   const synthetic = opts.synthetic === true || looksSynthetic(input);
   return buildReport({
-    synthetic, preset: preset.name, params, configVersion: configVersion(preset.name, params), seed: opts.seed ?? 1,
-    from: firstAt, to: lastAt, startingLamports, endingLamports: risk.equity(), trades: risk.trades, days: risk.days,
-    equity, costs: broker.costs, failedBuyBurnLamports: risk.failedBuyBurnLamports, entryStats, writtenOff: unclosed.length,
-    vetoes: Object.fromEntries(risk.vetoes), solUsdStart: sol.has ? sol.firstUsed(firstAt) : null, solUsdEnd: sol.has ? sol.at(lastAt) : null,
+    synthetic,
+    preset: preset.name,
+    params,
+    configVersion: configVersion(preset.name, params),
+    seed: opts.seed ?? 1,
+    from: firstAt,
+    to: lastAt,
+    startingLamports,
+    endingLamports: risk.equity(),
+    trades: risk.trades,
+    days: risk.days,
+    equity,
+    costs: broker.costs,
+    failedBuyBurnLamports: risk.failedBuyBurnLamports,
+    entryStats,
+    writtenOff: unclosed.length,
+    vetoes: Object.fromEntries(risk.vetoes),
+    solUsdStart: sol.has ? sol.firstUsed(firstAt) : null,
+    solUsdEnd: sol.has ? sol.at(lastAt) : null,
   });
 }

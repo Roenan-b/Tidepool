@@ -22,13 +22,24 @@ import {
 } from './session.js';
 import type { AuthStore, UserRecord } from './store.js';
 import { base32Encode } from './base32.js';
-import { ReplayGuard, generateTotpSecret, otpauthUri, verifyTotp } from './totp.js';
+import type { ReplayGuard } from './totp.js';
+import { generateTotpSecret, otpauthUri, verifyTotp } from './totp.js';
 
 export const LoginBody = z.object({
-  username: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_.-]+$/),
+  username: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_.-]+$/),
   password: z.string().min(1).max(1024),
 });
-export const TotpBody = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
+export const TotpBody = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
+});
 
 export interface RequestMeta {
   ip: string | null;
@@ -153,7 +164,7 @@ export class AuthService {
     const pending = verifyPendingTicket(pendingTicket, now.getTime(), this.deps.key);
     if (!pending) return { kind: 'expired' };
     const user = await this.deps.store.findUserById(pending.userId);
-    if (!user || !user.totpEnabled) return { kind: 'expired' };
+    if (!user?.totpEnabled) return { kind: 'expired' };
     const claim = await this.deps.store.claimAttempt(user.id, now);
     if (!claim.allowed) return this.lockedResult(claim.state, now);
     if (!(await this.checkCode(user, code))) return this.failed(user.id, now);
@@ -178,7 +189,9 @@ export class AuthService {
     await this.deps.store.deleteSession(hashSessionToken(token));
   }
 
-  async startEnrollment(viewer: Viewer): Promise<{ kind: 'already_enabled' } | { kind: 'ok'; uri: string; secretBase32: string }> {
+  async startEnrollment(
+    viewer: Viewer,
+  ): Promise<{ kind: 'already_enabled' } | { kind: 'ok'; uri: string; secretBase32: string }> {
     const user = await this.deps.store.findUserById(viewer.userId);
     if (!user) return { kind: 'already_enabled' };
     if (user.totpEnabled) return { kind: 'already_enabled' };
@@ -195,7 +208,11 @@ export class AuthService {
    * user's sessions are therefore ended and the enrolling client gets a new one (which also rotates
    * the token that existed before the second factor was proven).
    */
-  async confirmEnrollment(viewer: Viewer, code: string, meta: RequestMeta = { ip: null, userAgent: null }): Promise<EnrollmentResult> {
+  async confirmEnrollment(
+    viewer: Viewer,
+    code: string,
+    meta: RequestMeta = { ip: null, userAgent: null },
+  ): Promise<EnrollmentResult> {
     const now = this.now();
     const user = await this.deps.store.findUserById(viewer.userId);
     if (!user || user.totpEnabled) return { kind: 'already_enabled' };

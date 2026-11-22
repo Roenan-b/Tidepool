@@ -9,15 +9,18 @@ export interface SegmentOption<V extends string> {
 
 export function Segmented<V extends string>(props: {
   label: string;
-  options: ReadonlyArray<SegmentOption<V>>;
+  options: readonly SegmentOption<V>[];
   value: V;
   onChange: (v: V) => void;
   disabled?: boolean;
   full?: boolean;
   describedBy?: string;
 }) {
-  const refs = useRef<Array<HTMLButtonElement | null>>([]);
-  const index = Math.max(0, props.options.findIndex((o) => o.value === props.value));
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const index = Math.max(
+    0,
+    props.options.findIndex((o) => o.value === props.value),
+  );
 
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const n = props.options.length;

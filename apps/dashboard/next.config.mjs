@@ -25,7 +25,7 @@ if (dashboardOrigin.startsWith('https://')) {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  // ESLint is not part of this workspace; type checking still runs during `next build`.
+  // Linting runs once from the repository root (`npm run lint`), so `next build` skips it.
   eslint: { ignoreDuringBuilds: true },
   serverExternalPackages: ['pg'],
   async headers() {

@@ -4,7 +4,15 @@ import { join } from 'node:path';
 import { Keypair } from '@solana/web3.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { base58Decode, base58Encode } from './base58.js';
-import { createKeystore, decryptKeystore, loadKeystore, parseKeystore, parseSecretKeyText, readKeystorePublicKey, writeKeystoreFile } from './keystore.js';
+import {
+  createKeystore,
+  decryptKeystore,
+  loadKeystore,
+  parseKeystore,
+  parseSecretKeyText,
+  readKeystorePublicKey,
+  writeKeystoreFile,
+} from './keystore.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'signer-keystore-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -41,7 +49,9 @@ describe('keystore', () => {
     const ks = parseKeystore(readFileSync(path, 'utf8'));
     const ct = Buffer.from(ks.cipher.ciphertext, 'base64');
     ct[0] = ct[0]! ^ 0x01;
-    expect(() => decryptKeystore({ ...ks, cipher: { ...ks.cipher, ciphertext: ct.toString('base64') } }, PASS)).toThrow(/unable to decrypt keystore/);
+    expect(() => decryptKeystore({ ...ks, cipher: { ...ks.cipher, ciphertext: ct.toString('base64') } }, PASS)).toThrow(
+      /unable to decrypt keystore/,
+    );
     const otherPub = Keypair.generate().publicKey.toBase58();
     expect(() => decryptKeystore({ ...ks, publicKey: otherPub }, PASS)).toThrow(/unable to decrypt keystore/);
   });
@@ -76,7 +86,9 @@ describe('keystore', () => {
   it('parses exported secret keys in base58 and JSON array form', () => {
     const kp = Keypair.generate();
     expect(Buffer.from(parseSecretKeyText(base58Encode(kp.secretKey))).equals(Buffer.from(kp.secretKey))).toBe(true);
-    expect(Buffer.from(parseSecretKeyText(JSON.stringify(Array.from(kp.secretKey)))).equals(Buffer.from(kp.secretKey))).toBe(true);
+    expect(
+      Buffer.from(parseSecretKeyText(JSON.stringify(Array.from(kp.secretKey)))).equals(Buffer.from(kp.secretKey)),
+    ).toBe(true);
     expect(() => parseSecretKeyText('[1,2,3]')).toThrow(/64 byte values/);
     expect(() => parseSecretKeyText('0OIl')).toThrow(/base58/);
   });

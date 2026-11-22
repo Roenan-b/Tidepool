@@ -39,7 +39,11 @@ export interface ControlQueries {
   signals(limit: number, source?: string | null): Promise<SignalDto[]>;
 }
 
-export interface RpcHealth { healthy: boolean; lastOkAt: string | null; errorRate: number }
+export interface RpcHealth {
+  healthy: boolean;
+  lastOkAt: string | null;
+  errorRate: number;
+}
 
 export interface PgQueriesOptions {
   pool: pg.Pool;
@@ -105,17 +109,30 @@ export class PgQueries implements ControlQueries {
   async status(): Promise<StatusDto> {
     const now = this.clock.now();
     const mode = await this.activeMode();
-    const row = (await this.pool.query<{
-      engine_state: EngineState; halt_reason: string | null; preset: PresetName; cash_lamports: string;
-      sod_equity_lamports: string; sod_date: string | null;
-    }>(
-      `SELECT engine_state, halt_reason, preset, cash_lamports, sod_equity_lamports, to_char(sod_date, 'YYYY-MM-DD') AS sod_date FROM pool_state WHERE mode = $1`,
-      [mode],
-    )).rows[0];
+    const row = (
+      await this.pool.query<{
+        engine_state: EngineState;
+        halt_reason: string | null;
+        preset: PresetName;
+        cash_lamports: string;
+        sod_equity_lamports: string;
+        sod_date: string | null;
+      }>(
+        `SELECT engine_state, halt_reason, preset, cash_lamports, sod_equity_lamports, to_char(sod_date, 'YYYY-MM-DD') AS sod_date FROM pool_state WHERE mode = $1`,
+        [mode],
+      )
+    ).rows[0];
     if (!row) throw new Error('pool_state row missing');
-    const settings = (await this.pool.query<{ deposit_address: string | null; withdraw_address: string | null; pending_withdraw_address: string | null; pending_withdraw_effective_at: Date | null }>(
-      'SELECT deposit_address, withdraw_address, pending_withdraw_address, pending_withdraw_effective_at FROM settings WHERE id = 1',
-    )).rows[0];
+    const settings = (
+      await this.pool.query<{
+        deposit_address: string | null;
+        withdraw_address: string | null;
+        pending_withdraw_address: string | null;
+        pending_withdraw_effective_at: Date | null;
+      }>(
+        'SELECT deposit_address, withdraw_address, pending_withdraw_address, pending_withdraw_effective_at FROM settings WHERE id = 1',
+      )
+    ).rows[0];
     const book = await loadBookTotals(this.pool, mode);
     const preset = this.presetFor(row.preset);
     const cash = toBig(row.cash_lamports);
@@ -124,12 +141,14 @@ export class PgQueries implements ControlQueries {
     const free = cash - book.heldLamports - fee;
     const today = utcDate(now);
     const sod = row.sod_date === today ? toBig(row.sod_equity_lamports) : equity;
-    const trades = (await this.pool.query<{ n: string; wins: string }>(
-      `SELECT count(*)::text AS n, count(*) FILTER (WHERE realized_pnl_lamports > 0)::text AS wins
+    const trades = (
+      await this.pool.query<{ n: string; wins: string }>(
+        `SELECT count(*)::text AS n, count(*) FILTER (WHERE realized_pnl_lamports > 0)::text AS wins
          FROM positions WHERE mode = $1 AND status = 'closed'
           AND closed_at >= (($2::date)::timestamp AT TIME ZONE 'UTC') AND closed_at < ((($2::date) + 1)::timestamp AT TIME ZONE 'UTC')`,
-      [mode, today],
-    )).rows[0]!;
+        [mode, today],
+      )
+    ).rows[0]!;
     return {
       mode,
       liveTradingAllowed: this.liveTradingAllowed,
@@ -165,12 +184,22 @@ export class PgQueries implements ControlQueries {
   async positions(opts: { status: 'open' | 'closed' | 'all'; limit: number }): Promise<PositionDto[]> {
     const mode = await this.activeMode();
     const limit = clampLimit(opts.limit, 50);
-    const where = opts.status === 'closed' ? `status = 'closed'` : opts.status === 'all' ? 'TRUE' : `status <> 'closed'`;
+    const where =
+      opts.status === 'closed' ? `status = 'closed'` : opts.status === 'all' ? 'TRUE' : `status <> 'closed'`;
     const order = opts.status === 'closed' ? 'closed_at DESC' : 'opened_at DESC';
     const res = await this.pool.query<{
-      id: string; mint: string; symbol: string; strategy: string; mode: TradingMode; status: PositionDto['status'];
-      entry_lamports: string; mark_lamports: string | null; realized_pnl_lamports: string | null;
-      opened_at: Date; closed_at: Date | null; exit_reason: string | null;
+      id: string;
+      mint: string;
+      symbol: string;
+      strategy: string;
+      mode: TradingMode;
+      status: PositionDto['status'];
+      entry_lamports: string;
+      mark_lamports: string | null;
+      realized_pnl_lamports: string | null;
+      opened_at: Date;
+      closed_at: Date | null;
+      exit_reason: string | null;
     }>(
       `SELECT id, mint, symbol, strategy, mode, status, entry_lamports, mark_lamports, realized_pnl_lamports, opened_at, closed_at, exit_reason
          FROM positions WHERE mode = $1 AND ${where} ORDER BY ${order} LIMIT $2`,
@@ -180,7 +209,12 @@ export class PgQueries implements ControlQueries {
       const entry = toBig(r.entry_lamports);
       const mark = r.status === 'closed' ? null : toBigOrNull(r.mark_lamports);
       return {
-        id: r.id, mint: r.mint, symbol: r.symbol, strategy: r.strategy, mode: r.mode, status: r.status,
+        id: r.id,
+        mint: r.mint,
+        symbol: r.symbol,
+        strategy: r.strategy,
+        mode: r.mode,
+        status: r.status,
         entryLamports: entry.toString(),
         markLamports: mark === null ? null : mark.toString(),
         unrealizedPnlLamports: mark === null ? null : (mark - entry).toString(),
@@ -194,8 +228,16 @@ export class PgQueries implements ControlQueries {
 
   async candidates(limit: number): Promise<CandidateDto[]> {
     const res = await this.pool.query<{
-      mint: string; symbol: string; score: number; reasons: unknown; price_usd: number; features: Record<string, unknown>;
-      safety: Record<string, unknown>; veto_reason: string | null; observed_at: Date; expires_at: Date;
+      mint: string;
+      symbol: string;
+      score: number;
+      reasons: unknown;
+      price_usd: number;
+      features: Record<string, unknown>;
+      safety: Record<string, unknown>;
+      veto_reason: string | null;
+      observed_at: Date;
+      expires_at: Date;
     }>(
       `SELECT mint, symbol, score, reasons, price_usd, features, safety, veto_reason, observed_at, expires_at
          FROM candidates WHERE expires_at > $1 ORDER BY score DESC LIMIT $2`,
@@ -220,19 +262,42 @@ export class PgQueries implements ControlQueries {
 
   async events(opts: { limit: number; before: number | null }): Promise<AuditEventDto[]> {
     const rows = await this.audit.list({ limit: clampLimit(opts.limit, 100), before: opts.before });
-    return rows.map((e) => ({ seq: e.seq, at: e.at, actor: e.actor, type: e.type, ref: e.ref, payload: e.payload, hash: e.hash }));
+    return rows.map((e) => ({
+      seq: e.seq,
+      at: e.at,
+      actor: e.actor,
+      type: e.type,
+      ref: e.ref,
+      payload: e.payload,
+      hash: e.hash,
+    }));
   }
 
   async signals(limit: number, source: string | null = null): Promise<SignalDto[]> {
-    const res = await this.pool.query<{ id: string; source: string; mint: string | null; kind: string; observed_at: Date; payload: unknown }>(
+    const res = await this.pool.query<{
+      id: string;
+      source: string;
+      mint: string | null;
+      kind: string;
+      observed_at: Date;
+      payload: unknown;
+    }>(
       'SELECT id::text AS id, source, mint, kind, observed_at, payload FROM signals WHERE ($2::text IS NULL OR source = $2) ORDER BY id DESC LIMIT $1',
       [clampLimit(limit, 100), source],
     );
-    return res.rows.map((r) => ({ id: r.id, source: r.source, mint: r.mint, kind: r.kind, observedAt: r.observed_at.toISOString(), payload: r.payload }));
+    return res.rows.map((r) => ({
+      id: r.id,
+      source: r.source,
+      mint: r.mint,
+      kind: r.kind,
+      observedAt: r.observed_at.toISOString(),
+      payload: r.payload,
+    }));
   }
 
   /** Runs a full audit-chain verification and caches the result. */
   async refreshAuditValidity(): Promise<boolean> {
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- multi-line assignment reads better as a guard
     if (!this.auditRefresh) {
       this.auditRefresh = this.audit
         .verify()
@@ -262,11 +327,13 @@ export class PgQueries implements ControlQueries {
     );
     const sorted = lat.rows.map((r) => Number(r.ms)).filter((n) => Number.isFinite(n));
 
-    const landing = (await this.pool.query<{ landed: string; failed: string }>(
-      `SELECT count(*) FILTER (WHERE status = 'landed')::text AS landed, count(*) FILTER (WHERE status = 'failed')::text AS failed
+    const landing = (
+      await this.pool.query<{ landed: string; failed: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'landed')::text AS landed, count(*) FILTER (WHERE status = 'failed')::text AS failed
          FROM orders WHERE mode = $1 AND coalesce(submitted_at, created_at) >= $2`,
-      [mode, hourAgo],
-    )).rows[0]!;
+        [mode, hourAgo],
+      )
+    ).rows[0]!;
     const landed = Number(landing.landed);
     const failed = Number(landing.failed);
 
@@ -276,17 +343,22 @@ export class PgQueries implements ControlQueries {
     );
     const dataFreshnessSeconds: Record<string, number | null> = {};
     for (const s of this.knownSources) dataFreshnessSeconds[s] = null;
-    for (const r of fresh.rows) dataFreshnessSeconds[r.source] = Math.max(0, Math.round((now.getTime() - r.last.getTime()) / 1000));
+    for (const r of fresh.rows)
+      dataFreshnessSeconds[r.source] = Math.max(0, Math.round((now.getTime() - r.last.getTime()) / 1000));
 
-    const rec = (await this.pool.query<{ at: Date; ok: boolean; diff_lamports: string | null }>(
-      'SELECT at, ok, diff_lamports FROM reconciliation_runs WHERE mode = $1 ORDER BY id DESC LIMIT 1',
-      [mode],
-    )).rows[0];
+    const rec = (
+      await this.pool.query<{ at: Date; ok: boolean; diff_lamports: string | null }>(
+        'SELECT at, ok, diff_lamports FROM reconciliation_runs WHERE mode = $1 ORDER BY id DESC LIMIT 1',
+        [mode],
+      )
+    ).rows[0];
 
-    const trades = (await this.pool.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM positions WHERE mode = $1 AND status = 'closed' AND closed_at >= $2`,
-      [mode, dayAgo],
-    )).rows[0]!;
+    const trades = (
+      await this.pool.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM positions WHERE mode = $1 AND status = 'closed' AND closed_at >= $2`,
+        [mode, dayAgo],
+      )
+    ).rows[0]!;
 
     if (!this.auditCache || Date.now() - this.auditCache.at > this.auditTtlMs) {
       // Refresh in the background; report the last known value meanwhile.
@@ -295,7 +367,9 @@ export class PgQueries implements ControlQueries {
 
     const rpc = this.rpcHealth();
     return {
-      latencyMs: { signalToSubmit: { p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95), p99: percentile(sorted, 0.99) } },
+      latencyMs: {
+        signalToSubmit: { p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95), p99: percentile(sorted, 0.99) },
+      },
       landingRate: landed + failed > 0 ? landed / (landed + failed) : null,
       rpc: { healthy: rpc.healthy, lastOkAt: rpc.lastOkAt, errorRate: rpc.errorRate },
       dataFreshnessSeconds,
