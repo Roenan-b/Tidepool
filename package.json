@@ -1,6 +1,6 @@
 {
   "name": "tidepool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Solana meme coin trading system: Scout, Trader and Risk Officer agents with a reservation ledger, an isolated signer and a one-button dashboard. Paper trading by default.",
   "workspaces": [

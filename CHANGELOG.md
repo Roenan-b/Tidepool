@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Entries are generated from [Conventional Commits](https://www.conventionalcommits.org) by Release Please, and versions follow [Semantic Versioning](https://semver.org).
 
+## [0.1.1](https://github.com/Roenan-b/Tidepool/compare/v0.1.0...v0.1.1) (2026-11-22)
+
+
+### Build and Dependencies
+
+* add linting, formatting, CI, security scanning and release automation ([f24dc6f](https://github.com/Roenan-b/Tidepool/commit/f24dc6fbf76793245ecb4358c01fc7e2edeff09c))
+
 ## 0.1.0 (2026-11-22)
 
 ### Features
