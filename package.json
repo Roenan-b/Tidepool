@@ -1,0 +1,25 @@
+{
+  "name": "tidepool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solana meme coin trading system: Scout, Trader and Risk Officer agents with a reservation ledger, an isolated signer and a one-button dashboard. Paper trading by default.",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "build": "npm run build -w @tidepool/core && npm run build -w @tidepool/engine -w @tidepool/signer",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "npm run migrate -w @tidepool/engine",
+    "engine": "npm run start -w @tidepool/engine",
+    "signer": "npm run start -w @tidepool/signer",
+    "dashboard": "npm run dev -w @tidepool/dashboard",
+    "backtest": "npm run backtest -w @tidepool/engine --"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "tsx": "4.19.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

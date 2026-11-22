@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+keystore/
+*.keystore.json
+data/recordings/*
+!data/recordings/.gitkeep
+data/reports/
+.DS_Store
+next-env.d.ts
+*.tsbuildinfo
