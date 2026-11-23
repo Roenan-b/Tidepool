@@ -7,8 +7,9 @@ export default defineConfig({
       reporter: ['text-summary', 'lcov', 'json-summary'],
       include: ['lib/**/*.ts', 'app/**/*.ts', 'scripts/**/*.ts'],
       exclude: ['**/*.test.ts', '**/test/**', '**/testkit.ts', '**/testing.ts'],
-      // Floors set a few points under current coverage; raise them as coverage grows.
-      thresholds: { lines: 60, branches: 85, functions: 80, statements: 60 },
+      // Floors sit a few points under coverage as measured by Vitest 5 (AST-aware v8 remapping,
+      // which counts statements and branches differently from Vitest 3). Raise them as coverage grows.
+      thresholds: { lines: 60, branches: 57, functions: 61, statements: 58 },
     },
     environment: 'node',
     include: ['lib/**/*.test.ts', 'app/**/*.test.ts', 'scripts/**/*.test.ts'],
