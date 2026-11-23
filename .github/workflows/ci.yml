@@ -134,8 +134,7 @@ jobs:
       - name: Build packages
         run: npm run build
       - name: Build dashboard (demo data only)
-        run: npx next build
-        working-directory: apps/dashboard
+        run: npm run build -w @tidepool/dashboard
         env:
           DEMO_MODE: 'true'
 

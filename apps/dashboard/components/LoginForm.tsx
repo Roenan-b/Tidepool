@@ -1,6 +1,6 @@
 'use client';
 /** Two-step sign-in: username and password, then the 6-digit authenticator code. */
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type SubmitEvent } from 'react';
 import { formText, postJson } from './client.js';
 
 export function LoginForm() {
@@ -9,7 +9,7 @@ export function LoginForm() {
   const [busy, setBusy] = useState(false);
   const codeRef = useRef<HTMLInputElement>(null);
 
-  const submitPassword = async (e: FormEvent<HTMLFormElement>) => {
+  const submitPassword = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setBusy(true);
@@ -24,6 +24,7 @@ export function LoginForm() {
       return;
     }
     if (r.data.next === 'enroll') {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full reload after a session change clears client state
       window.location.assign('/settings/security');
       return;
     }
@@ -31,7 +32,7 @@ export function LoginForm() {
     setTimeout(() => codeRef.current?.focus(), 0);
   };
 
-  const submitCode = async (e: FormEvent<HTMLFormElement>) => {
+  const submitCode = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setBusy(true);
@@ -43,6 +44,7 @@ export function LoginForm() {
       if (r.status === 401 && r.message.includes('password again')) setStep('password');
       return;
     }
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full reload after a session change clears client state
     window.location.assign('/');
   };
 

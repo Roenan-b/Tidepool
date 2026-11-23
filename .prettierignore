@@ -7,3 +7,5 @@ CHANGELOG.md
 .release-please-manifest.json
 data/
 db/**/*.sql
+# Next.js rewrites this file on every build.
+apps/dashboard/tsconfig.json

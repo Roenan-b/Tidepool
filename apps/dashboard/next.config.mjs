@@ -1,6 +1,6 @@
 /**
  * Next.js configuration for the Tidepool dashboard.
- * The Content-Security-Policy is set per request in middleware.ts (it carries a nonce);
+ * The Content-Security-Policy is set per request in proxy.ts (it carries a nonce);
  * the static security headers below apply to every response.
  */
 
@@ -25,14 +25,14 @@ if (dashboardOrigin.startsWith('https://')) {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  // Linting runs once from the repository root (`npm run lint`), so `next build` skips it.
-  eslint: { ignoreDuringBuilds: true },
   serverExternalPackages: ['pg'],
   async headers() {
     return [{ source: '/:path*', headers: staticSecurityHeaders }];
   },
+  // Builds use webpack (`--webpack` in package.json) because Turbopack has no equivalent of
+  // extensionAlias, and source files import siblings with a `.js` suffix (the ESM convention
+  // used across the repo).
   webpack(config) {
-    // Source files import siblings with a `.js` suffix (ESM convention used across the repo).
     config.resolve.extensionAlias = {
       ...(config.resolve.extensionAlias ?? {}),
       '.js': ['.ts', '.tsx', '.js'],

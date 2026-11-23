@@ -62,6 +62,7 @@ export function usePoll<T>(
       try {
         const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
         if (res.status === 401) {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full reload after a session change clears client state
           window.location.assign('/login');
           return;
         }

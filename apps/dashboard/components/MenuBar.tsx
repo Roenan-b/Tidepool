@@ -41,6 +41,7 @@ export function MenuBar(props: {
 
   const signOut = async () => {
     await postJson('/api/auth/logout');
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full reload after a session change clears client state
     window.location.assign('/login');
   };
 

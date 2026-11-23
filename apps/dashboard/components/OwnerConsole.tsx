@@ -3,7 +3,7 @@
  * Jake's home view: one big Start/Pause control, preset choice, pool and today cards, deposit and
  * withdraw sheets, live-mode switch and the "Stop and sell everything" kill switch.
  */
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type SubmitEvent } from 'react';
 import type { PresetName, StatusDto } from '@tidepool/core';
 import {
   formatDateTime,
@@ -440,7 +440,7 @@ export function OwnerConsole(props: {
         </p>
         <form
           className="stack"
-          onSubmit={(e: FormEvent) => {
+          onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
             e.preventDefault();
             if (typed === KILL_WORD)
               void act('/api/control/kill', { confirm: KILL_WORD }, 'Kill switch sent. Positions are being sold.');
@@ -510,7 +510,7 @@ export function OwnerConsole(props: {
         </p>
         <form
           className="stack"
-          onSubmit={(e: FormEvent) => {
+          onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
             e.preventDefault();
             if (typed === props.liveConfirmation)
               void act('/api/control/mode', { mode: 'live', confirm: typed }, 'Live mode is on.');

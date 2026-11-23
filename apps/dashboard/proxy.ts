@@ -26,7 +26,7 @@ export function buildCsp(nonce: string, dev: boolean): string {
   ].join('; ');
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   const nonce = btoa(String.fromCharCode(...bytes));

@@ -1,6 +1,6 @@
 'use client';
 /** TOTP enrollment: generate a secret, show it as a QR code, and enable only after a valid code. */
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { formText, postJson } from './client.js';
 
 interface Enrollment {
@@ -24,7 +24,7 @@ export function SecurityPanel(props: { enabled: boolean; demo: boolean; role: 'o
     else setError(r.message);
   };
 
-  const confirm = async (e: FormEvent<HTMLFormElement>) => {
+  const confirm = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const code = formText(new FormData(e.currentTarget), 'code').replace(/\s/g, '');
     setBusy(true);

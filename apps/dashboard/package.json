@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3000",
-    "build": "next build",
+    "dev": "next dev --webpack -H 127.0.0.1 -p 3000",
+    "build": "next build --webpack",
     "start": "next start -H 127.0.0.1 -p 3000",
     "typecheck": "tsc --noEmit",
     "create-user": "tsx scripts/createUser.ts",
@@ -13,18 +13,18 @@
   },
   "dependencies": {
     "@tidepool/core": "0.1.0",
-    "next": "15.5.29",
+    "next": "16.4.6",
     "pg": "8.23.1",
     "qrcode": "1.5.4",
-    "react": "19.1.10",
-    "react-dom": "19.1.10",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",
     "@types/qrcode": "1.5.6",
-    "@types/react": "19.1.17",
-    "@types/react-dom": "19.1.11"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
   },
   "browserslist": [
     "chrome >= 109",

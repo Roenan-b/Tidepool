@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsp } from '../middleware.js';
+import { buildCsp } from '../proxy.js';
 import { parseArgs } from '../scripts/createUser.js';
 import { MAX_BODY_BYTES, parseJsonText, readJsonBody } from './http.js';
 import { readBoundedText } from './bounded.js';
