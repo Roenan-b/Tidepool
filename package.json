@@ -56,5 +56,10 @@
       "prettier --write"
     ]
   },
-  "packageManager": "npm@11.21.3"
+  "packageManager": "npm@11.21.3",
+  "overrides": {
+    "@solana/web3.js": {
+      "jayson": "5.0.0"
+    }
+  }
 }
