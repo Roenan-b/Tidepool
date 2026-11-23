@@ -97,10 +97,7 @@ export interface ParseStats {
 }
 
 /** Normalizes a list endpoint body (array, or a single object) and validates each record. */
-export function parseRecords<T>(
-  body: unknown,
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
-): { records: T[]; stats: ParseStats } {
+export function parseRecords<T>(body: unknown, schema: z.ZodType<T>): { records: T[]; stats: ParseStats } {
   const list = Array.isArray(body) ? body : body && typeof body === 'object' ? [body] : [];
   const records: T[] = [];
   let skipped = 0;

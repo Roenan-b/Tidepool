@@ -123,7 +123,7 @@ declare module 'fastify' {
   }
 }
 
-function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
+function parse<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
   const r = schema.safeParse(value ?? {});
   if (!r.success) {
     const first = r.error.issues[0];
@@ -132,7 +132,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
       `invalid request: ${first ? `${first.path.join('.') || 'body'} ${first.message}` : 'body'}`.slice(0, 200),
     );
   }
-  return r.data as z.infer<T>;
+  return r.data;
 }
 
 /**
@@ -209,7 +209,7 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
   }
 
   /** Wraps a mutating route: role check, rate limit, body validation, audit of every outcome. */
-  function mutation<T extends z.ZodTypeAny>(
+  function mutation<T extends z.ZodType>(
     route: string,
     schema: T | null,
     allowed: (role: ActorRole, body: z.infer<T>) => boolean,
@@ -223,7 +223,8 @@ export function buildControlApi(deps: ControlApiDeps): FastifyInstance {
       }
       let body: z.infer<T>;
       try {
-        body = schema ? parse(schema, req.body) : undefined;
+        // Routes without a schema take no body; their handlers ignore it.
+        body = (schema ? parse(schema, req.body) : undefined) as z.infer<T>;
       } catch (err) {
         await recordMutation(req, route, 400, { outcome: 'invalid_body' });
         throw err;

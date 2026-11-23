@@ -19,12 +19,12 @@ const dasResponseSchema = z.object({
   result: z
     .object({
       token_accounts: z
-        .array(z.object({ owner: z.string(), amount: z.union([z.number(), z.string()]) }).passthrough())
+        .array(z.object({ owner: z.string(), amount: z.union([z.number(), z.string()]) }).loose())
         .default([]),
     })
     .optional()
     .nullable(),
-  error: z.object({ message: z.string().optional() }).passthrough().optional().nullable(),
+  error: z.object({ message: z.string().optional() }).loose().optional().nullable(),
 });
 
 export interface HeliusDasHolderCounterOptions {

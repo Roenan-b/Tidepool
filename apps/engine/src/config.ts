@@ -15,10 +15,7 @@ const optionalString = z.preprocess(
   z.string().optional(),
 );
 
-const optionalUrl = z.preprocess(
-  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
-  z.string().url().optional(),
-);
+const optionalUrl = z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.url().optional());
 
 function intWithDefault(def: number, min: number, max: number) {
   return z.preprocess(
@@ -30,7 +27,7 @@ function intWithDefault(def: number, min: number, max: number) {
 function numberWithDefault(def: number, min: number, max: number) {
   return z.preprocess(
     (v) => (v === undefined || (typeof v === 'string' && v.trim() === '') ? def : Number(v)),
-    z.number().finite().min(min).max(max),
+    z.number().min(min).max(max),
   );
 }
 
@@ -59,12 +56,10 @@ const EnvSchema = z.object({
 
   ENGINE_API_HOST: z.preprocess(
     (v) => (v === undefined || v === '' ? '127.0.0.1' : v),
-    z.enum(LOOPBACK_HOSTS, { errorMap: () => ({ message: 'ENGINE_API_HOST must be a loopback address' }) }),
+    z.enum(LOOPBACK_HOSTS, { error: 'ENGINE_API_HOST must be a loopback address' }),
   ),
   ENGINE_API_PORT: intWithDefault(7070, 1, 65535),
-  ENGINE_API_TOKEN: secret('ENGINE_API_TOKEN', 32).refine((v) => v !== undefined, {
-    message: 'ENGINE_API_TOKEN is required',
-  }),
+  ENGINE_API_TOKEN: secret('ENGINE_API_TOKEN', 32).pipe(z.string({ error: 'ENGINE_API_TOKEN is required' })),
 
   RESERVATION_TICKET_SECRET: secret('RESERVATION_TICKET_SECRET', 32),
   SIGNER_URL: optionalUrl,
@@ -74,15 +69,12 @@ const EnvSchema = z.object({
 
   SOLANA_RPC_URL: z.preprocess(
     (v) => (v === undefined || v === '' ? 'https://api.mainnet-beta.solana.com' : v),
-    z.string().url(),
+    z.url(),
   ),
   HELIUS_API_KEY: optionalString,
   HELIUS_WS_URL: optionalUrl,
-  DEXSCREENER_BASE_URL: z.preprocess(
-    (v) => (v === undefined || v === '' ? 'https://api.dexscreener.com' : v),
-    z.string().url(),
-  ),
-  JUPITER_BASE_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.jup.ag' : v), z.string().url()),
+  DEXSCREENER_BASE_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.dexscreener.com' : v), z.url()),
+  JUPITER_BASE_URL: z.preprocess((v) => (v === undefined || v === '' ? 'https://api.jup.ag' : v), z.url()),
   JUPITER_API_KEY: optionalString,
   LANDING_METHOD: z.preprocess((v) => (v === undefined || v === '' ? 'rpc' : v), z.enum(['rpc', 'sender', 'jito'])),
   SENDER_URL: optionalUrl,

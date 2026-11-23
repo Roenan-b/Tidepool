@@ -45,7 +45,7 @@ const SwapInfo = z
     feeAmount: U64.optional(),
     feeMint: Pubkey.optional(),
   })
-  .passthrough();
+  .loose();
 
 /** Quote response. passthrough() keeps unknown fields because the quote is sent back verbatim to swap-instructions. */
 export const QuoteResponseSchema = z
@@ -59,13 +59,13 @@ export const QuoteResponseSchema = z
     slippageBps: z.number().int().min(0).max(10_000),
     priceImpactPct: z.string().regex(/^-?\d+(\.\d+)?([eE]-?\d+)?$/),
     routePlan: z
-      .array(z.object({ swapInfo: SwapInfo, percent: z.number().min(0).max(100).nullable().optional() }).passthrough())
+      .array(z.object({ swapInfo: SwapInfo, percent: z.number().min(0).max(100).nullable().optional() }).loose())
       .min(1)
       .max(32),
     contextSlot: z.number().optional(),
     timeTaken: z.number().optional(),
   })
-  .passthrough();
+  .loose();
 export type JupiterQuote = z.infer<typeof QuoteResponseSchema>;
 
 export const InstructionSchema = z.object({

@@ -88,7 +88,7 @@ export class HttpClient {
   }
 
   /** Fetches and parses JSON, then validates it. Throws HttpError or SchemaError. */
-  async json<T>(url: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, req: RequestOptions = {}): Promise<T> {
+  async json<T>(url: string, schema: z.ZodType<T>, req: RequestOptions = {}): Promise<T> {
     const raw = await this.rawJson(url, req);
     const parsed = schema.safeParse(raw);
     if (!parsed.success) {

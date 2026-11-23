@@ -21,8 +21,8 @@ interface RouteSpec {
   method: Method;
   enginePath: string;
   roles: readonly Role[];
-  body?: z.ZodTypeAny;
-  query?: z.ZodTypeAny;
+  body?: z.ZodType;
+  query?: z.ZodType;
 }
 
 const BOTH: readonly Role[] = ['owner', 'operator'];

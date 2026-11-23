@@ -122,7 +122,7 @@ const completionSchema = z.object({
 
 const modelOutputSchema = z.object({
   label: z.enum(NARRATIVE_LABELS),
-  score: z.number().finite(),
+  score: z.number(),
   scamFlags: z.array(z.string()).max(32).default([]),
   summary: z.string().default(''),
 });

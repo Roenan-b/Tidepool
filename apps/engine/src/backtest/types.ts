@@ -13,20 +13,20 @@ export const SignalEventSchema = z.object({
   mint: Mint.nullable(),
   kind: z.string().min(1).max(64),
   observedAt: IsoTime,
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 export type SignalEvent = z.infer<typeof SignalEventSchema>;
 
 export const PricePointSchema = z.object({
   mint: Mint,
   at: IsoTime,
-  priceLamportsPerUnit: z.number().finite().positive(),
-  liquidityUsd: z.number().finite().nonnegative(),
+  priceLamportsPerUnit: z.number().positive(),
+  liquidityUsd: z.number().nonnegative(),
   venue: z.enum(['bondingCurve', 'graduated']).optional(),
 });
 export type PricePoint = z.infer<typeof PricePointSchema>;
 
-export const SolPricePointSchema = z.object({ at: IsoTime, solUsd: z.number().finite().positive() });
+export const SolPricePointSchema = z.object({ at: IsoTime, solUsd: z.number().positive() });
 export type SolPricePoint = z.infer<typeof SolPricePointSchema>;
 
 export interface BacktestInput {

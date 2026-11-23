@@ -10,7 +10,7 @@ export interface ReadJsonlOptions {
   maxLines?: number;
 }
 
-export async function readJsonl<S extends z.ZodTypeAny>(
+export async function readJsonl<S extends z.ZodType>(
   path: string,
   schema: S,
   opts: ReadJsonlOptions = {},
@@ -37,7 +37,7 @@ export async function readJsonl<S extends z.ZodTypeAny>(
       const issue = parsed.error.issues[0];
       throw new Error(`${path}:${n}: ${issue ? `${issue.path.join('.')} ${issue.message}` : 'invalid record'}`);
     }
-    out.push(parsed.data as z.infer<S>);
+    out.push(parsed.data);
   }
   return out;
 }

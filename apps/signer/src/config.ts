@@ -8,7 +8,7 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 const lamports = (name: string) =>
   z
-    .string({ required_error: `${name} is required` })
+    .string({ error: (iss) => (iss.input === undefined ? `${name} is required` : undefined) })
     .regex(/^\d{1,20}$/, `${name} must be an integer number of lamports`)
     .transform((v) => BigInt(v));
 
@@ -26,17 +26,17 @@ const pubkeyList = (name: string, requireOnCurve: boolean) =>
         try {
           key = new PublicKey(part);
         } catch {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not a valid base58 public key` });
+          ctx.addIssue({ code: 'custom', message: `${name}: "${part}" is not a valid base58 public key` });
           continue;
         }
         if (key.toBase58() !== part) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${name}: "${part}" is not in canonical base58 form` });
+          ctx.addIssue({ code: 'custom', message: `${name}: "${part}" is not in canonical base58 form` });
           continue;
         }
         if (requireOnCurve && !PublicKey.isOnCurve(key.toBytes())) {
           // A wallet address is on the ed25519 curve; token accounts and PDAs are not.
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `${name}: "${part}" is not a wallet address (off curve)`,
           });
           continue;
